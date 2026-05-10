@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>출석 체크</title>
+  <style>
+    /* 기존 스타일 유지 */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, 'Malgun Gothic', sans-serif; background: linear-gradient(135deg, #FFF1F2 0%, #FFE4E6 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 15px; }
+    .container { max-width: 450px; width: 100%; background: white; border-radius: 25px; padding: 45px 30px; text-align: center; box-shadow: 0 15px 35px rgba(251, 113, 133, 0.2); }
+    h1 { color: #9D174D; margin-bottom: 10px; font-size: 32px; font-weight: 800; }
+    
+    /* 한글 입력 최적화 속성 추가 */
+    input[type="text"] { 
+      width: 100%; padding: 20px; border: 2.5px solid #FECDD3; border-radius: 15px; 
+      font-size: 24px; margin-bottom: 20px; text-align: center; outline: none; 
+      background-color: #FFF9FA; 
+      ime-mode: active; /* 과거 브라우저용 한글 우선 설정 */
+    }
+    
+    .btn-submit { width: 100%; padding: 20px; background: #FB7185; color: white; border: none; border-radius: 15px; font-size: 22px; font-weight: 700; cursor: pointer; transition: 0.3s; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(3px); }
+    .modal-content { background: white; padding: 35px 25px; border-radius: 25px; width: 90%; max-width: 360px; text-align: center; }
+    .modal-btns { display: flex; flex-direction: column; gap: 12px; }
+    .modal-btns button { padding: 15px; border: none; border-radius: 12px; font-size: 17px; font-weight: 700; cursor: pointer; }
+    .btn-yes { background: #3B82F6; color: white; }
+    .btn-no { background: #F1F5F9; color: #64748b; }
+    .btn-maybe { background: #F8FAFC; color: #94a3b8; font-size: 14px !important; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>🌸 출석 체크</h1>
+    <p style="color: #BE185D; margin-bottom:35px; font-weight:500;">성함을 입력하고 버튼을 눌러주세요</p>
+    
+    <input type="text" id="userName" 
+           placeholder="이름 입력" 
+           autocomplete="off" 
+           autofocus 
+           lang="ko" 
+           onkeydown="if(event.keyCode==13) document.getElementById('attendBtn').click()">
+    
+    <button class="btn-submit" id="attendBtn">출석 하기</button>
+    <div id="resultMessage" style="margin-top:25px; display:none; padding:15px; border-radius:15px; background:#F8FAFC; line-height:1.6;"></div>
+  </div>
+
+  <div id="infoModal" class="modal">
+    <div class="modal-content">
+      <p id="modalText"></p>
+      <div class="modal-btns">
+        <button class="btn-yes" onclick="handleChoice('yes')">네, 연장할게요! 😊</button>
+        <button class="btn-no" onclick="handleChoice('no')">아니요, 괜찮아요</button>
+        <button class="btn-maybe" onclick="handleChoice('maybe')">조금 더 고민해볼게요</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbweNqZrvKYvJ2R2u34TK6oFcVbcN909A3mq3rkyCKjzjiEEf6LIaVn-3GyVlnw4DCAYaQ/exec';
+    let currentUserName = "";
+    let autoRefreshTimer = null;
+
+    // 2. 페이지 로드 시 항상 커서를 입력창으로
+    window.onload = () => {
+      document.getElementById('userName').focus();
+    };
+
+    document.getElementById('attendBtn').addEventListener('click', async () => {
+      const nameInput = document.getElementById('userName');
+      const name = nameInput.value.trim();
+      if (!name) { alert('성함을 입력해 주세요!'); return; }
+      
+      currentUserName = name;
+      const resultDiv = document.getElementById('resultMessage');
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '⏳ 기록 중입니다...';
+
+      try {
+        const response = await fetch(scriptUrl, { method: 'POST', body: JSON.stringify({ name: name }) });
+        const result = await response.json();
+
+        if (result.success) {
+          resultDiv.innerHTML = `✅ <strong>${name}</strong>님, 출석 완료!<br>오늘도 즐거운 시간 되세요!`;
+          nameInput.value = '';
+          startAutoRefresh(30000);
+
+          const rem = Number(result.remaining);
+          if (rem === 2 || rem === 1) {
+            showModal(`앞으로 <strong>${rem}회</strong>의 잔여 회차가 남았습니다.<br>미리 연장하시겠습니까? 🌸`);
+          } else if (rem <= 0) {
+            setTimeout(() => { alert("모든 회차를 소모하셨습니다. 감사합니다!"); location.reload(); }, 1000);
+          }
+        }
+      } catch (e) {
+        resultDiv.innerHTML = '❌ 오류가 발생했습니다.';
+      }
+    });
+
+    function startAutoRefresh(ms) {
+      if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
+      autoRefreshTimer = setTimeout(() => { location.reload(); }, ms);
+    }
+
+    function showModal(text) {
+      document.getElementById('modalText').innerHTML = text;
+      document.getElementById('infoModal').style.display = 'flex';
+    }
+
+    async function handleChoice(choice) {
+      document.getElementById('infoModal').style.display = 'none';
+      if (choice === 'maybe') { location.reload(); return; }
+      await fetch(scriptUrl, { method: 'POST', body: JSON.stringify({ name: currentUserName, action: choice }) });
+      alert('네, 좋은 하루 보내세요!');
+      location.reload();
+    }
+  </script>
+</body>
+</html>
