@@ -67,8 +67,8 @@
       <p id="modalText"></p>
       <div class="modal-btns">
         <button class="btn-yes" onclick="handleChoice('yes')">네, 연장할게요! 😊</button>
-        <button class="btn-no" onclick="handleChoice('no')">아니요, 괜찮아요</button>
-        <button class="btn-maybe" onclick="handleChoice('maybe')">조금 더 고민해볼게요</button>
+        <button class="btn-no" onclick="handleChoice('maybe')">조금 더 고민할게요</button>
+        <button class="btn-maybe" onclick="handleChoice('no')">그만할게요</button>
       </div>
     </div>
   </div>
@@ -125,15 +125,25 @@
         }
 
         resultDiv.innerHTML = '✅ <strong>' + name + '</strong>님, 출석 완료!<br>오늘도 즐거운 시간 되세요!';
+        if (result.rollbookBanner) {
+          resultDiv.innerHTML +=
+            '<div style="margin-top:14px;padding:14px;border-radius:12px;background:#fff1f2;border:1px solid #fecdd3;color:#444;line-height:1.55;font-size:14px;">' +
+            result.rollbookBanner +
+            '</div>';
+        }
         nameInput.value = '';
         renderMemberStats(result);
         startAutoRefresh(30000);
 
         const rem = Number(result.remaining);
-        if (rem === 2 || rem === 1) {
+        if (result.showExtensionModal) {
           showModal('앞으로 <strong>' + rem + '회</strong>의 잔여 회차가 남았습니다.<br>미리 연장하시겠습니까? 🌸');
         } else if (rem <= 0) {
-          setTimeout(() => { alert('모든 회차를 소모하셨습니다. 감사합니다!'); location.reload(); }, 1000);
+          if (result.bannerKind === 'red_last') {
+            setTimeout(() => { location.reload(); }, 2800);
+          } else {
+            setTimeout(() => { alert('모든 회차를 소모하셨습니다. 감사합니다!'); location.reload(); }, 1000);
+          }
         }
       } catch (e) {
         resultDiv.innerHTML = '❌ 오류가 발생했습니다.';
@@ -153,7 +163,6 @@
 
     async function handleChoice(choice) {
       document.getElementById('infoModal').style.display = 'none';
-      if (choice === 'maybe') { location.reload(); return; }
       try {
         await fetch(scriptUrl, {
           method: 'POST',
