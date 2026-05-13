@@ -99,24 +99,41 @@
       el.classList.add('visible');
     }
 
-    document.getElementById('attendBtn').addEventListener('click', async () => {
-      const nameInput = document.getElementById('userName');
-      const name = nameInput.value.trim();
-      if (!name) { alert('성함을 입력해 주세요!'); return; }
-
-      currentUserName = name;
+    // 출석 처리 공통 함수 (phoneHint: 동명이인 구분용 뒷자리 4자리)
+    async function doAttend(name, phoneHint) {
       const resultDiv = document.getElementById('resultMessage');
       resultDiv.style.display = 'block';
       resultDiv.innerHTML = '⏳ 기록 중입니다...';
       document.getElementById('memberStats').classList.remove('visible');
 
+      // 동명이인 선택 UI 제거
+      const pickEl = document.getElementById('phonePicker');
+      if (pickEl) pickEl.remove();
+
       try {
         const response = await fetch(scriptUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'rollbookAttend', name: name }),
+          body: JSON.stringify({ action: 'rollbookAttend', name: name, phoneHint: phoneHint || '' }),
         });
         const result = await response.json();
+
+        // 동명이인 → 전화번호 뒷자리 선택 UI
+        if (!result.success && result.needPhoneSelect) {
+          resultDiv.innerHTML = '🔍 동명이인이 있습니다. 전화번호 끝자리를 선택해 주세요.';
+          const picker = document.createElement('div');
+          picker.id = 'phonePicker';
+          picker.style.cssText = 'display:flex;flex-direction:column;gap:10px;margin-top:14px;';
+          result.candidates.forEach(function(c) {
+            const btn = document.createElement('button');
+            btn.textContent = '📱 끝자리 ' + c.last4;
+            btn.style.cssText = 'padding:14px;border:2px solid #FECDD3;border-radius:12px;font-size:18px;font-weight:700;background:#FFF9FA;cursor:pointer;width:100%;';
+            btn.onclick = function() { doAttend(name, c.last4); };
+            picker.appendChild(btn);
+          });
+          resultDiv.after(picker);
+          return;
+        }
 
         if (!result.success) {
           resultDiv.innerHTML = '❌ ' + (result.message || '처리할 수 없습니다.');
@@ -128,10 +145,9 @@
         if (result.rollbookBanner) {
           resultDiv.innerHTML +=
             '<div style="margin-top:14px;padding:14px;border-radius:12px;background:#fff1f2;border:1px solid #fecdd3;color:#444;line-height:1.55;font-size:14px;">' +
-            result.rollbookBanner +
-            '</div>';
+            result.rollbookBanner + '</div>';
         }
-        nameInput.value = '';
+        document.getElementById('userName').value = '';
         renderMemberStats(result);
         startAutoRefresh(30000);
 
@@ -149,6 +165,14 @@
         resultDiv.innerHTML = '❌ 오류가 발생했습니다.';
         renderMemberStats(null);
       }
+    }
+
+    document.getElementById('attendBtn').addEventListener('click', async () => {
+      const nameInput = document.getElementById('userName');
+      const name = nameInput.value.trim();
+      if (!name) { alert('성함을 입력해 주세요!'); return; }
+      currentUserName = name;
+      await doAttend(name, '');
     });
 
     function startAutoRefresh(ms) {
