@@ -78,6 +78,7 @@
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbwVJSc6rY5tcBSB1VaRi4DBEXGyUBr1ADFfs6QEA9Z9bu0G-0mdMAv374-MdPVYMnSaeQ/exec';
 
     let currentUserName = '';
+    let lastPhoneLast4 = '';
     let autoRefreshTimer = null;
 
     window.onload = () => {
@@ -141,6 +142,7 @@
           return;
         }
 
+        lastPhoneLast4 = result.phoneLast4 || phoneHint || '';
         resultDiv.innerHTML = '✅ <strong>' + name + '</strong>님, 출석 완료!<br>오늘도 즐거운 시간 되세요!';
         if (result.rollbookBanner) {
           resultDiv.innerHTML +=
@@ -195,6 +197,7 @@
             action: 'rollbookExtension',
             name: currentUserName,
             choice: choice,
+            phoneHint: lastPhoneLast4 || '',
           }),
         });
       } catch (e) {}
