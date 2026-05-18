@@ -2,32 +2,138 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>출석 체크</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, 'Malgun Gothic', sans-serif; background: linear-gradient(135deg, #FFF1F2 0%, #FFE4E6 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 15px; }
-    .container { max-width: 450px; width: 100%; background: white; border-radius: 25px; padding: 45px 30px; text-align: center; box-shadow: 0 15px 35px rgba(251, 113, 133, 0.2); }
-    h1 { color: #9D174D; margin-bottom: 10px; font-size: 32px; font-weight: 800; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, 'Malgun Gothic', sans-serif;
+      background: linear-gradient(135deg, #FFF1F2 0%, #FFE4E6 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+      touch-action: manipulation;
+    }
+    .container {
+      max-width: 420px;
+      width: 100%;
+      background: white;
+      border-radius: 25px;
+      padding: 32px 22px 26px;
+      text-align: center;
+      box-shadow: 0 15px 35px rgba(251, 113, 133, 0.2);
+    }
+    h1 { color: #9D174D; margin-bottom: 6px; font-size: 30px; font-weight: 800; }
+    .subtitle { color: #BE185D; margin-bottom: 22px; font-weight: 600; font-size: 15px; }
 
-    input[type="text"] {
-      width: 100%; padding: 20px; border: 2.5px solid #FECDD3; border-radius: 15px;
-      font-size: 24px; margin-bottom: 20px; text-align: center; outline: none;
-      background-color: #FFF9FA;
+    .phone-display {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+    }
+    .phone-prefix {
+      font-size: 22px;
+      font-weight: 800;
+      color: #9D174D;
+      padding: 12px 10px;
+      background: #FFF1F2;
+      border-radius: 12px;
+      border: 2px solid #FECDD3;
+      min-width: 58px;
+    }
+    .phone-segment {
+      display: flex;
+      gap: 5px;
+      padding: 10px 8px;
+      border: 2.5px solid #FECDD3;
+      border-radius: 12px;
+      background: #FFF9FA;
+      min-width: 108px;
+      justify-content: center;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .phone-segment.active {
+      border-color: #FB7185;
+      box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.2);
+    }
+    .phone-segment.filled { border-color: #F9A8D4; }
+    .phone-digit {
+      width: 22px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: 800;
+      color: #831843;
+    }
+    .phone-digit.empty {
+      color: #FDA4AF;
+      font-weight: 400;
     }
 
-    .btn-submit { width: 100%; padding: 20px; background: #FB7185; color: white; border: none; border-radius: 15px; font-size: 22px; font-weight: 700; cursor: pointer; transition: 0.3s; }
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(3px); }
-    .modal-content { background: white; padding: 35px 25px; border-radius: 25px; width: 90%; max-width: 360px; text-align: center; }
-    .modal-btns { display: flex; flex-direction: column; gap: 12px; }
-    .modal-btns button { padding: 15px; border: none; border-radius: 12px; font-size: 17px; font-weight: 700; cursor: pointer; }
-    .btn-yes { background: #3B82F6; color: white; }
-    .btn-no { background: #F1F5F9; color: #64748b; }
-    .btn-maybe { background: #F8FAFC; color: #94a3b8; font-size: 14px !important; }
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .keypad button {
+      border: none;
+      border-radius: 14px;
+      padding: 20px 0;
+      font-size: 28px;
+      font-weight: 800;
+      color: #831843;
+      background: #FFF1F2;
+      border: 2px solid #FECDD3;
+      cursor: pointer;
+      transition: transform 0.08s, background 0.15s;
+      user-select: none;
+    }
+    .keypad button:active {
+      transform: scale(0.96);
+      background: #FFE4E6;
+    }
+    .keypad .key-zero { grid-column: 2; }
+    .key-back {
+      font-size: 22px !important;
+      color: #9D174D !important;
+    }
+
+    .status-line {
+      margin-top: 18px;
+      display: none;
+      padding: 14px;
+      border-radius: 14px;
+      background: #F8FAFC;
+      line-height: 1.6;
+      font-size: 15px;
+      text-align: left;
+    }
+    .status-line.visible { display: block; }
+    .status-line .record-est {
+      display: block;
+      margin-top: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #9D174D;
+    }
+    .status-line .record-count {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      margin-top: 4px;
+    }
 
     .member-stats {
       display: none;
-      margin-top: 18px;
+      margin-top: 14px;
       padding: 14px 16px;
       border-radius: 14px;
       background: #F8FAFC;
@@ -40,26 +146,102 @@
     .member-stats dt { font-weight: 700; color: #9D174D; margin-top: 8px; }
     .member-stats dt:first-child { margin-top: 0; }
     .member-stats dd { margin-left: 0; color: #475569; }
+
+    .picker-btns { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+    .picker-btns button {
+      padding: 16px;
+      border: 2px solid #FECDD3;
+      border-radius: 12px;
+      font-size: 17px;
+      font-weight: 700;
+      background: #FFF9FA;
+      cursor: pointer;
+      width: 100%;
+      color: #831843;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      backdrop-filter: blur(3px);
+    }
+    .modal-content {
+      background: white;
+      padding: 35px 25px;
+      border-radius: 25px;
+      width: 90%;
+      max-width: 360px;
+      text-align: center;
+    }
+    .modal-btns { display: flex; flex-direction: column; gap: 12px; }
+    .modal-btns button {
+      padding: 15px;
+      border: none;
+      border-radius: 12px;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-yes { background: #3B82F6; color: white; }
+    .btn-no { background: #F1F5F9; color: #64748b; }
+    .btn-maybe { background: #F8FAFC; color: #94a3b8; font-size: 14px !important; }
   </style>
 </head>
 <body>
 
   <div class="container">
     <h1>🌸 출석 체크</h1>
-    <p style="color: #BE185D; margin-bottom:35px; font-weight:500;">성함을 입력하고 버튼을 눌러주세요</p>
+    <p class="subtitle">전화번호 끝 8자리</p>
 
-    <input type="text" id="userName"
-           placeholder="이름 입력"
-           autocomplete="off"
-           autofocus
-           lang="ko"
-           onkeydown="if(event.keyCode==13) document.getElementById('attendBtn').click()">
+    <div class="phone-display" aria-label="전화번호 입력">
+      <span class="phone-prefix">010</span>
+      <div class="phone-segment active" id="segMid" aria-hidden="true">
+        <span class="phone-digit empty" data-i="0">_</span>
+        <span class="phone-digit empty" data-i="1">_</span>
+        <span class="phone-digit empty" data-i="2">_</span>
+        <span class="phone-digit empty" data-i="3">_</span>
+      </div>
+      <div class="phone-segment" id="segEnd" aria-hidden="true">
+        <span class="phone-digit empty" data-i="0">_</span>
+        <span class="phone-digit empty" data-i="1">_</span>
+        <span class="phone-digit empty" data-i="2">_</span>
+        <span class="phone-digit empty" data-i="3">_</span>
+      </div>
+    </div>
 
-    <button class="btn-submit" id="attendBtn">출석 하기</button>
+    <div class="keypad" role="group" aria-label="숫자 패드">
+      <button type="button" data-key="1">1</button>
+      <button type="button" data-key="2">2</button>
+      <button type="button" data-key="3">3</button>
+      <button type="button" data-key="4">4</button>
+      <button type="button" data-key="5">5</button>
+      <button type="button" data-key="6">6</button>
+      <button type="button" data-key="7">7</button>
+      <button type="button" data-key="8">8</button>
+      <button type="button" data-key="9">9</button>
+      <button type="button" class="key-zero" data-key="0">0</button>
+      <button type="button" class="key-back" data-key="back" aria-label="지우기">←</button>
+    </div>
 
-    <dl class="member-stats" id="memberStats" aria-live="polite"></dl>
+    <div class="status-line" id="statusLine" aria-live="polite"></div>
+    <dl class="member-stats" id="memberStats"></dl>
+    <div id="pickerWrap"></div>
+  </div>
 
-    <div id="resultMessage" style="margin-top:25px; display:none; padding:15px; border-radius:15px; background:#F8FAFC; line-height:1.6;"></div>
+  <div id="extraPassModal" class="modal">
+    <div class="modal-content">
+      <p id="extraPassModalText">이미 오늘 출석이 기록되어 있습니다.<br>수강권을 하나 더 사용하시겠습니까?</p>
+      <div class="modal-btns">
+        <button class="btn-yes" onclick="confirmExtraPass(true)">네, 사용할게요</button>
+        <button class="btn-no" onclick="confirmExtraPass(false)">아니요</button>
+      </div>
+    </div>
   </div>
 
   <div id="infoModal" class="modal">
@@ -74,16 +256,122 @@
   </div>
 
   <script>
-    /** code.gs 웹앱 배포 URL과 동일하게 맞추세요 (약수 신청서와 같은 프로젝트 배포 가능) */
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbwVJSc6rY5tcBSB1VaRi4DBEXGyUBr1ADFfs6QEA9Z9bu0G-0mdMAv374-MdPVYMnSaeQ/exec';
 
     let currentUserName = '';
+    let lastPhoneSuffix8 = '';
     let lastPhoneLast4 = '';
     let autoRefreshTimer = null;
+    let isSubmitting = false;
+    let recordingCountdownTimer = null;
+    const RECORDING_EST_SEC = 12;
 
-    window.onload = () => {
-      document.getElementById('userName').focus();
-    };
+    const digits = ['', '', '', '', '', '', '', ''];
+    let activeSegment = 'mid';
+
+    function renderDigits() {
+      const midEl = document.getElementById('segMid');
+      const endEl = document.getElementById('segEnd');
+      [midEl, endEl].forEach(function (seg, segIdx) {
+        const base = segIdx * 4;
+        const filled = digits.slice(base, base + 4).every(function (d) { return d !== ''; });
+        seg.classList.toggle('filled', filled);
+        seg.classList.toggle('active', (segIdx === 0 && activeSegment === 'mid') || (segIdx === 1 && activeSegment === 'end'));
+        seg.querySelectorAll('.phone-digit').forEach(function (el, i) {
+          const v = digits[base + i];
+          if (v) {
+            el.textContent = v;
+            el.classList.remove('empty');
+          } else {
+            el.textContent = '_';
+            el.classList.add('empty');
+          }
+        });
+      });
+    }
+
+    function filledCount() {
+      return digits.filter(function (d) { return d !== ''; }).length;
+    }
+
+    function getPhoneSuffix8() {
+      return digits.join('');
+    }
+
+    function clearPhoneInput() {
+      for (var i = 0; i < 8; i++) digits[i] = '';
+      activeSegment = 'mid';
+      renderDigits();
+    }
+
+    function appendDigit(n) {
+      if (isSubmitting) return;
+      var idx = filledCount();
+      if (idx >= 8) return;
+      digits[idx] = String(n);
+      if (idx === 3) activeSegment = 'end';
+      renderDigits();
+      if (filledCount() === 8) {
+        submitAttend();
+      }
+    }
+
+    function backspaceDigit() {
+      if (isSubmitting) return;
+      var idx = filledCount() - 1;
+      if (idx < 0) return;
+      digits[idx] = '';
+      activeSegment = idx < 4 ? 'mid' : 'end';
+      renderDigits();
+      hideStatus();
+      document.getElementById('pickerWrap').innerHTML = '';
+    }
+
+    function showStatus(html, keepVisible) {
+      var el = document.getElementById('statusLine');
+      el.innerHTML = html;
+      el.classList.add('visible');
+      if (!keepVisible) el.classList.add('visible');
+    }
+
+    function hideStatus() {
+      stopRecordingCountdown();
+      var el = document.getElementById('statusLine');
+      el.classList.remove('visible');
+      el.innerHTML = '';
+    }
+
+    function stopRecordingCountdown() {
+      if (recordingCountdownTimer) {
+        clearInterval(recordingCountdownTimer);
+        recordingCountdownTimer = null;
+      }
+    }
+
+    function showRecordingStatus() {
+      stopRecordingCountdown();
+      var el = document.getElementById('statusLine');
+      var sec = RECORDING_EST_SEC;
+      function paint() {
+        el.innerHTML =
+          '⏳ 기록 중입니다…' +
+          '<span class="record-est">예상 약 ' + RECORDING_EST_SEC + '초 · 남은 시간</span>' +
+          '<span class="record-count">' + sec + '</span>';
+        el.classList.add('visible');
+      }
+      paint();
+      recordingCountdownTimer = setInterval(function () {
+        sec -= 1;
+        if (sec <= 0) {
+          stopRecordingCountdown();
+          el.innerHTML =
+            '⏳ 기록 중입니다…<span class="record-est">조금만 기다려 주세요</span>';
+          return;
+        }
+        var countEl = el.querySelector('.record-count');
+        if (countEl) countEl.textContent = String(sec);
+      }, 1000);
+    }
 
     function renderMemberStats(data) {
       const el = document.getElementById('memberStats');
@@ -100,57 +388,91 @@
       el.classList.add('visible');
     }
 
-    // 출석 처리 공통 함수 (phoneHint: 동명이인 구분용 뒷자리 4자리)
-    async function doAttend(name, phoneHint) {
-      const resultDiv = document.getElementById('resultMessage');
-      resultDiv.style.display = 'block';
-      resultDiv.innerHTML = '⏳ 기록 중입니다...';
-      document.getElementById('memberStats').classList.remove('visible');
+    async function doAttend(phoneSuffix8, phoneHint, confirmExtraPass) {
+      if (isSubmitting && !confirmExtraPass) return;
+      isSubmitting = true;
 
-      // 동명이인 선택 UI 제거
-      const pickEl = document.getElementById('phonePicker');
-      if (pickEl) pickEl.remove();
+      showRecordingStatus();
+      document.getElementById('memberStats').classList.remove('visible');
+      document.getElementById('pickerWrap').innerHTML = '';
 
       try {
         const response = await fetch(scriptUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'rollbookAttend', name: name, phoneHint: phoneHint || '' }),
+          body: JSON.stringify({
+            action: 'rollbookAttend',
+            phoneSuffix8: String(phoneSuffix8 || lastPhoneSuffix8 || '').replace(/\D/g, '').slice(-8),
+            phone: '010' + String(phoneSuffix8 || lastPhoneSuffix8 || '').replace(/\D/g, '').slice(-8),
+            phoneHint: phoneHint || '',
+            confirmExtraPass: !!confirmExtraPass,
+          }),
         });
         const result = await response.json();
 
-        // 동명이인 → 전화번호 뒷자리 선택 UI
         if (!result.success && result.needPhoneSelect) {
-          resultDiv.innerHTML = '🔍 동명이인이 있습니다. 전화번호 끝자리를 선택해 주세요.';
-          const picker = document.createElement('div');
-          picker.id = 'phonePicker';
-          picker.style.cssText = 'display:flex;flex-direction:column;gap:10px;margin-top:14px;';
-          result.candidates.forEach(function(c) {
+          stopRecordingCountdown();
+          showStatus('🔍 ' + (result.message || '회원을 선택해 주세요.'));
+          const wrap = document.getElementById('pickerWrap');
+          wrap.innerHTML = '<div class="picker-btns"></div>';
+          const box = wrap.querySelector('.picker-btns');
+          (result.candidates || []).forEach(function (c) {
             const btn = document.createElement('button');
-            btn.textContent = '📱 끝자리 ' + c.last4;
-            btn.style.cssText = 'padding:14px;border:2px solid #FECDD3;border-radius:12px;font-size:18px;font-weight:700;background:#FFF9FA;cursor:pointer;width:100%;';
-            btn.onclick = function() { doAttend(name, c.last4); };
-            picker.appendChild(btn);
+            btn.type = 'button';
+            var label = '📱 끝자리 ' + c.last4;
+            if (c.name) label += ' · ' + c.name;
+            btn.textContent = label;
+            btn.onclick = function () {
+              doAttend(phoneSuffix8 || lastPhoneSuffix8, c.last4);
+            };
+            box.appendChild(btn);
           });
-          resultDiv.after(picker);
+          isSubmitting = false;
+          return;
+        }
+
+        if (!result.success && result.needExtraPassConfirm) {
+          stopRecordingCountdown();
+          hideStatus();
+          document.getElementById('extraPassModalText').innerHTML =
+            result.message || '수강권을 하나 더 사용하시겠습니까?';
+          document.getElementById('extraPassModal').style.display = 'flex';
+          window._pendingExtraPass = {
+            phoneSuffix8: phoneSuffix8 || lastPhoneSuffix8,
+            phoneHint: phoneHint || '',
+          };
+          isSubmitting = false;
           return;
         }
 
         if (!result.success) {
-          resultDiv.innerHTML = '❌ ' + (result.message || '처리할 수 없습니다.');
+          stopRecordingCountdown();
+          const msg = result.duplicateBlocked
+            ? '⏳ ' + (result.message || '방금 출석 처리되었습니다.')
+            : '❌ ' + (result.message || '처리할 수 없습니다.');
+          showStatus(msg);
           renderMemberStats(null);
+          clearPhoneInput();
+          isSubmitting = false;
           return;
         }
 
+        const name = result.memberName || currentUserName || '회원';
+        currentUserName = name;
+        lastPhoneSuffix8 = phoneSuffix8 || lastPhoneSuffix8;
         lastPhoneLast4 = result.phoneLast4 || phoneHint || '';
-        resultDiv.innerHTML = '✅ <strong>' + name + '</strong>님, 출석 완료!<br>오늘도 즐거운 시간 되세요!';
+
+        stopRecordingCountdown();
+        showStatus('✅ <strong>' + name + '</strong>님, 출석 완료!<br>오늘도 즐거운 시간 되세요!');
         if (result.rollbookBanner) {
-          resultDiv.innerHTML +=
-            '<div style="margin-top:14px;padding:14px;border-radius:12px;background:#fff1f2;border:1px solid #fecdd3;color:#444;line-height:1.55;font-size:14px;">' +
-            result.rollbookBanner + '</div>';
+          showStatus(
+            '✅ <strong>' + name + '</strong>님, 출석 완료!<br>오늘도 즐거운 시간 되세요!' +
+            '<div style="margin-top:12px;padding:12px;border-radius:12px;background:#fff1f2;border:1px solid #fecdd3;color:#444;font-size:14px;">' +
+            result.rollbookBanner + '</div>'
+          );
         }
-        document.getElementById('userName').value = '';
         renderMemberStats(result);
+        clearPhoneInput();
         startAutoRefresh(30000);
 
         const rem = Number(result.remaining);
@@ -158,33 +480,57 @@
           showModal('앞으로 <strong>' + rem + '회</strong>의 잔여 회차가 남았습니다.<br>미리 연장하시겠습니까? 🌸');
         } else if (rem <= 0) {
           if (result.bannerKind === 'red_last') {
-            setTimeout(() => { location.reload(); }, 2800);
+            setTimeout(function () { location.reload(); }, 2800);
           } else {
-            setTimeout(() => { alert('모든 회차를 소모하셨습니다. 감사합니다!'); location.reload(); }, 1000);
+            setTimeout(function () {
+              alert('모든 회차를 소모하셨습니다. 감사합니다!');
+              location.reload();
+            }, 1000);
           }
         }
       } catch (e) {
-        resultDiv.innerHTML = '❌ 오류가 발생했습니다.';
+        stopRecordingCountdown();
+        showStatus('❌ 오류가 발생했습니다.');
         renderMemberStats(null);
+        clearPhoneInput();
       }
+      isSubmitting = false;
     }
 
-    document.getElementById('attendBtn').addEventListener('click', async () => {
-      const nameInput = document.getElementById('userName');
-      const name = nameInput.value.trim();
-      if (!name) { alert('성함을 입력해 주세요!'); return; }
-      currentUserName = name;
-      await doAttend(name, '');
+    function submitAttend() {
+      const suffix = getPhoneSuffix8();
+      if (suffix.length !== 8) return;
+      lastPhoneSuffix8 = suffix;
+      doAttend(suffix, '');
+    }
+
+    document.querySelectorAll('.keypad button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const key = btn.getAttribute('data-key');
+        if (key === 'back') backspaceDigit();
+        else appendDigit(key);
+      });
     });
 
     function startAutoRefresh(ms) {
       if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
-      autoRefreshTimer = setTimeout(() => { location.reload(); }, ms);
+      autoRefreshTimer = setTimeout(function () { location.reload(); }, ms);
     }
 
     function showModal(text) {
       document.getElementById('modalText').innerHTML = text;
       document.getElementById('infoModal').style.display = 'flex';
+    }
+
+    async function confirmExtraPass(useExtra) {
+      document.getElementById('extraPassModal').style.display = 'none';
+      const pending = window._pendingExtraPass;
+      window._pendingExtraPass = null;
+      if (!useExtra || !pending) {
+        clearPhoneInput();
+        return;
+      }
+      await doAttend(pending.phoneSuffix8, pending.phoneHint, true);
     }
 
     async function handleChoice(choice) {
@@ -197,6 +543,7 @@
             action: 'rollbookExtension',
             name: currentUserName,
             choice: choice,
+            phoneSuffix8: lastPhoneSuffix8,
             phoneHint: lastPhoneLast4 || '',
           }),
         });
@@ -204,6 +551,8 @@
       alert('네, 좋은 하루 보내세요!');
       location.reload();
     }
+
+    renderDigits();
   </script>
 </body>
 </html>
