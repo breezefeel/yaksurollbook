@@ -114,7 +114,7 @@
       background: #F8FAFC;
       line-height: 1.6;
       font-size: 15px;
-      text-align: left;
+      text-align: center;
     }
     .status-line.visible { display: block; }
     .status-line .record-est {
@@ -133,19 +133,36 @@
 
     .member-stats {
       display: none;
-      margin-top: 14px;
-      padding: 14px 16px;
+      margin-top: 16px;
+      padding: 16px 14px;
       border-radius: 14px;
       background: #F8FAFC;
-      text-align: left;
-      font-size: 14px;
-      line-height: 1.65;
-      color: #334155;
+      text-align: center;
+      line-height: 1.5;
     }
     .member-stats.visible { display: block; }
-    .member-stats dt { font-weight: 700; color: #9D174D; margin-top: 8px; }
-    .member-stats dt:first-child { margin-top: 0; }
-    .member-stats dd { margin-left: 0; color: #475569; }
+    .member-stats .result-line1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: #9D174D;
+      letter-spacing: 0.02em;
+    }
+    .member-stats .result-line2 {
+      margin-top: 10px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #475569;
+    }
+    .member-stats .result-line3 {
+      margin-top: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+    .member-stats .result-line3 .auto-close-sec {
+      font-weight: 800;
+      color: #9D174D;
+    }
 
     .picker-btns { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
     .picker-btns button {
@@ -230,7 +247,7 @@
     </div>
 
     <div class="status-line" id="statusLine" aria-live="polite"></div>
-    <dl class="member-stats" id="memberStats"></dl>
+    <div class="member-stats" id="memberStats" aria-live="polite"></div>
     <div id="pickerWrap"></div>
   </div>
 
@@ -262,9 +279,12 @@
     let lastPhoneSuffix8 = '';
     let lastPhoneLast4 = '';
     let autoRefreshTimer = null;
+    let autoCloseCountdownTimer = null;
     let isSubmitting = false;
     let recordingCountdownTimer = null;
-    const RECORDING_EST_SEC = 12;
+    let backgroundSyncInFlight = false;
+    const BACKGROUND_EST_SEC = 5;
+    const AUTO_CLOSE_SEC = 30;
 
     const digits = ['', '', '', '', '', '', '', ''];
     let activeSegment = 'mid';
@@ -324,6 +344,7 @@
       activeSegment = idx < 4 ? 'mid' : 'end';
       renderDigits();
       hideStatus();
+      hideMemberStats();
       document.getElementById('pickerWrap').innerHTML = '';
     }
 
@@ -341,6 +362,62 @@
       el.innerHTML = '';
     }
 
+    function hideMemberStats() {
+      stopAutoCloseCountdown();
+      var el = document.getElementById('memberStats');
+      el.classList.remove('visible');
+      el.innerHTML = '';
+    }
+
+    function stopAutoCloseCountdown() {
+      if (autoCloseCountdownTimer) {
+        clearInterval(autoCloseCountdownTimer);
+        autoCloseCountdownTimer = null;
+      }
+      if (autoRefreshTimer) {
+        clearTimeout(autoRefreshTimer);
+        autoRefreshTimer = null;
+      }
+    }
+
+    function paintAutoCloseLine(sec) {
+      var line = document.getElementById('autoCloseLine');
+      if (!line) return;
+      line.innerHTML = '자동 닫힘 <span class="auto-close-sec">' + sec + '</span>초 후';
+    }
+
+    function startAutoCloseCountdown() {
+      stopAutoCloseCountdown();
+      var sec = AUTO_CLOSE_SEC;
+      paintAutoCloseLine(sec);
+      autoCloseCountdownTimer = setInterval(function () {
+        sec -= 1;
+        if (sec <= 0) {
+          stopAutoCloseCountdown();
+          location.reload();
+          return;
+        }
+        paintAutoCloseLine(sec);
+      }, 1000);
+      autoRefreshTimer = setTimeout(function () {
+        location.reload();
+      }, AUTO_CLOSE_SEC * 1000);
+    }
+
+    function formatResultLine1(data) {
+      var attend = data.attendCount;
+      var total = data.payRounds;
+      if (data.sessionDisplay) {
+        var m = String(data.sessionDisplay).match(/^(\d+)\s*\/\s*(\d+)$/);
+        if (m) {
+          attend = parseInt(m[1], 10);
+          total = parseInt(m[2], 10);
+        }
+      }
+      if (attend == null || isNaN(attend) || total == null || isNaN(total)) return '-';
+      return attend + '회차 / 총' + total + '회';
+    }
+
     function stopRecordingCountdown() {
       if (recordingCountdownTimer) {
         clearInterval(recordingCountdownTimer);
@@ -348,15 +425,20 @@
       }
     }
 
-    function showRecordingStatus() {
+    function showRecordingStatus(subtitleHtml) {
       stopRecordingCountdown();
       var el = document.getElementById('statusLine');
-      var sec = RECORDING_EST_SEC;
+      var sec = BACKGROUND_EST_SEC;
       function paint() {
         el.innerHTML =
-          '⏳ 기록 중입니다…' +
-          '<span class="record-est">예상 약 ' + RECORDING_EST_SEC + '초 · 남은 시간</span>' +
-          '<span class="record-count">' + sec + '</span>';
+          '⏳ ' +
+          (subtitleHtml || '출석 기록 중입니다…') +
+          '<span class="record-est">스케줄 반영 등 · 최대 약 ' +
+          BACKGROUND_EST_SEC +
+          '초 · 남은 시간</span>' +
+          '<span class="record-count">' +
+          sec +
+          '</span>';
         el.classList.add('visible');
       }
       paint();
@@ -364,8 +446,8 @@
         sec -= 1;
         if (sec <= 0) {
           stopRecordingCountdown();
-          el.innerHTML =
-            '⏳ 기록 중입니다…<span class="record-est">조금만 기다려 주세요</span>';
+          var est = el.querySelector('.record-est');
+          if (est) est.textContent = '거의 완료되었습니다. 조금만 기다려 주세요';
           return;
         }
         var countEl = el.querySelector('.record-count');
@@ -373,19 +455,113 @@
       }, 1000);
     }
 
-    function renderMemberStats(data) {
+    function renderMemberStats(data, options) {
+      options = options || {};
       const el = document.getElementById('memberStats');
-      if (!data || data.payRounds == null) {
-        el.classList.remove('visible');
-        el.innerHTML = '';
+      if (!data || (data.payRounds == null && data.attendCount == null)) {
+        hideMemberStats();
         return;
       }
+      var remain = data.remaining != null ? data.remaining : '-';
+      var line3 =
+        options.showAutoClose === false
+          ? ''
+          : '<p class="result-line3" id="autoCloseLine">자동 닫힘 <span class="auto-close-sec">' +
+            AUTO_CLOSE_SEC +
+            '</span>초 후</p>';
       el.innerHTML =
-        '<dt>결제 회차</dt><dd>' + data.payRounds + '회권</dd>' +
-        '<dt>현재 출석</dt><dd>' + (data.attendCount != null ? data.attendCount : '-') + '회</dd>' +
-        '<dt>남은 횟수</dt><dd>' + (data.remaining != null ? data.remaining : '-') + '회</dd>' +
-        '<dt>마지막 출석</dt><dd>' + (data.lastAttend || '-') + '</dd>';
+        '<p class="result-line1">' +
+        formatResultLine1(data) +
+        '</p>' +
+        '<p class="result-line2">남은 횟수 ' +
+        remain +
+        '회</p>' +
+        line3;
       el.classList.add('visible');
+      if (options.showAutoClose !== false && options.startAutoClose !== false) {
+        startAutoCloseCountdown();
+      } else if (options.showAutoClose !== false) {
+        paintAutoCloseLine(AUTO_CLOSE_SEC);
+      }
+    }
+
+    function showQuickAttendFeedback(result) {
+      hideStatus();
+      renderMemberStats(result, { startAutoClose: true });
+    }
+
+    function finalizeAttendSuccess(result, syncResult) {
+      stopRecordingCountdown();
+      hideStatus();
+      var merged =
+        syncResult && (syncResult.sessionDisplay || syncResult.attendCount != null)
+          ? Object.assign({}, result, syncResult)
+          : result;
+      renderMemberStats(merged, { startAutoClose: false });
+      if (syncResult && !syncResult.success && syncResult.message) {
+        var line3 = document.getElementById('autoCloseLine');
+        if (line3) {
+          line3.innerHTML =
+            '<span style="color:#b45309;font-size:14px;">스케줄표 반영: ' +
+            syncResult.message +
+            '</span>';
+        }
+      }
+      if (result.rollbookBanner) {
+        var panel = document.getElementById('memberStats');
+        if (panel && panel.classList.contains('visible')) {
+          panel.insertAdjacentHTML(
+            'beforeend',
+            '<p style="margin-top:12px;padding:10px;border-radius:10px;background:#fff1f2;border:1px solid #fecdd3;color:#444;font-size:13px;line-height:1.5;">' +
+              result.rollbookBanner +
+              '</p>'
+          );
+        }
+      }
+    }
+
+    async function runBackgroundScheduleSync(phoneSuffix8, phoneHint, confirmExtraPass, result) {
+      if (backgroundSyncInFlight) return;
+      backgroundSyncInFlight = true;
+      try {
+        const response = await fetch(scriptUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'rollbookAttendSync',
+            phoneSuffix8: String(phoneSuffix8 || '').replace(/\D/g, '').slice(-8),
+            phone: '010' + String(phoneSuffix8 || '').replace(/\D/g, '').slice(-8),
+            phoneHint: phoneHint || '',
+            confirmExtraPass: !!confirmExtraPass,
+          }),
+        });
+        const syncResult = await response.json();
+        finalizeAttendSuccess(result, syncResult);
+        handlePostAttendModals(result);
+      } catch (e) {
+        finalizeAttendSuccess(result, { success: false, message: '네트워크 오류' });
+      } finally {
+        backgroundSyncInFlight = false;
+        isSubmitting = false;
+      }
+    }
+
+    function handlePostAttendModals(result) {
+      const rem = Number(result.remaining);
+      if (result.showExtensionModal) {
+        stopAutoCloseCountdown();
+        showModal('앞으로 <strong>' + rem + '회</strong>의 잔여 회차가 남았습니다.<br>미리 연장하시겠습니까? 🌸');
+      } else if (rem <= 0) {
+        stopAutoCloseCountdown();
+        if (result.bannerKind === 'red_last') {
+          setTimeout(function () { location.reload(); }, 2800);
+        } else {
+          setTimeout(function () {
+            alert('모든 회차를 소모하셨습니다. 감사합니다!');
+            location.reload();
+          }, 1000);
+        }
+      }
     }
 
     async function doAttend(phoneSuffix8, phoneHint, confirmExtraPass) {
@@ -393,7 +569,7 @@
       isSubmitting = true;
 
       showRecordingStatus();
-      document.getElementById('memberStats').classList.remove('visible');
+      hideMemberStats();
       document.getElementById('pickerWrap').innerHTML = '';
 
       try {
@@ -451,50 +627,37 @@
             ? '⏳ ' + (result.message || '방금 출석 처리되었습니다.')
             : '❌ ' + (result.message || '처리할 수 없습니다.');
           showStatus(msg);
-          renderMemberStats(null);
+          if (result.payRounds != null || result.attendCount != null) {
+            renderMemberStats(result, { showAutoClose: false });
+          } else {
+            hideMemberStats();
+          }
           clearPhoneInput();
           isSubmitting = false;
           return;
         }
 
-        const name = result.memberName || currentUserName || '회원';
-        currentUserName = name;
+        currentUserName = result.memberName || currentUserName;
         lastPhoneSuffix8 = phoneSuffix8 || lastPhoneSuffix8;
         lastPhoneLast4 = result.phoneLast4 || phoneHint || '';
 
-        stopRecordingCountdown();
-        showStatus('✅ <strong>' + name + '</strong>님, 출석 완료!<br>오늘도 즐거운 시간 되세요!');
-        if (result.rollbookBanner) {
-          showStatus(
-            '✅ <strong>' + name + '</strong>님, 출석 완료!<br>오늘도 즐거운 시간 되세요!' +
-            '<div style="margin-top:12px;padding:12px;border-radius:12px;background:#fff1f2;border:1px solid #fecdd3;color:#444;font-size:14px;">' +
-            result.rollbookBanner + '</div>'
-          );
-        }
-        renderMemberStats(result);
+        showQuickAttendFeedback(result);
         clearPhoneInput();
-        startAutoRefresh(30000);
 
-        const rem = Number(result.remaining);
-        if (result.showExtensionModal) {
-          showModal('앞으로 <strong>' + rem + '회</strong>의 잔여 회차가 남았습니다.<br>미리 연장하시겠습니까? 🌸');
-        } else if (rem <= 0) {
-          if (result.bannerKind === 'red_last') {
-            setTimeout(function () { location.reload(); }, 2800);
-          } else {
-            setTimeout(function () {
-              alert('모든 회차를 소모하셨습니다. 감사합니다!');
-              location.reload();
-            }, 1000);
-          }
-        }
+        runBackgroundScheduleSync(
+          phoneSuffix8 || lastPhoneSuffix8,
+          phoneHint || lastPhoneLast4,
+          confirmExtraPass,
+          result
+        );
+        return;
       } catch (e) {
         stopRecordingCountdown();
         showStatus('❌ 오류가 발생했습니다.');
-        renderMemberStats(null);
+        hideMemberStats();
         clearPhoneInput();
+        isSubmitting = false;
       }
-      isSubmitting = false;
     }
 
     function submitAttend() {
@@ -511,11 +674,6 @@
         else appendDigit(key);
       });
     });
-
-    function startAutoRefresh(ms) {
-      if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
-      autoRefreshTimer = setTimeout(function () { location.reload(); }, ms);
-    }
 
     function showModal(text) {
       document.getElementById('modalText').innerHTML = text;
