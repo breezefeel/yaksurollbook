@@ -12,7 +12,7 @@
       min-height: 100vh;
       display: flex;
       justify-content: center;
-      align-items: center;
+      align-items: flex-start;
       padding: 12px;
       touch-action: manipulation;
     }
@@ -34,7 +34,9 @@
       justify-content: center;
       gap: 6px;
       margin-bottom: 22px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      width: 100%;
+      max-width: 100%;
     }
     .phone-prefix {
       font-size: 22px;
@@ -208,13 +210,37 @@
     .btn-yes { background: #3B82F6; color: white; }
     .btn-no { background: #F1F5F9; color: #64748b; }
     .btn-maybe { background: #F8FAFC; color: #94a3b8; font-size: 14px !important; }
+
+    @media (max-width: 420px) {
+      .container { padding: 24px 14px 20px; }
+      h1 { font-size: 26px; }
+      .phone-display { gap: 4px; }
+      .phone-prefix {
+        font-size: 17px;
+        padding: 10px 6px;
+        min-width: 0;
+        flex-shrink: 0;
+      }
+      .phone-segment {
+        min-width: 0;
+        flex: 1 1 0;
+        padding: 8px 4px;
+        gap: 2px;
+      }
+      .phone-digit {
+        width: 1.1em;
+        min-width: 14px;
+        height: 28px;
+        font-size: 19px;
+      }
+    }
   </style>
 </head>
 <body>
 
   <div class="container">
     <h1>🌸 출석 체크</h1>
-    <p class="subtitle">전화번호 끝 8자리</p>
+    <p class="subtitle">전화번호 8자리</p>
 
     <div class="phone-display" aria-label="전화번호 입력">
       <span class="phone-prefix">010</span>
@@ -283,6 +309,7 @@
     let isSubmitting = false;
     let recordingCountdownTimer = null;
     let backgroundSyncInFlight = false;
+    let isPageResetting = false;
     const BACKGROUND_EST_SEC = 5;
     const AUTO_CLOSE_SEC = 30;
 
@@ -316,6 +343,44 @@
 
     function getPhoneSuffix8() {
       return digits.join('');
+    }
+
+    function scrollToPageBottom() {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          window.scrollTo({
+            top: document.documentElement.scrollHeight,
+            behavior: 'smooth',
+          });
+        });
+      });
+    }
+
+    function scrollToPageTop() {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function resetPageForNextGuest() {
+      if (isPageResetting) return;
+      isPageResetting = true;
+      stopAutoCloseCountdown();
+      stopRecordingCountdown();
+      hideStatus();
+      hideMemberStats();
+      document.getElementById('pickerWrap').innerHTML = '';
+      document.getElementById('extraPassModal').style.display = 'none';
+      document.getElementById('infoModal').style.display = 'none';
+      clearPhoneInput();
+      isSubmitting = false;
+      backgroundSyncInFlight = false;
+      currentUserName = '';
+      lastPhoneSuffix8 = '';
+      lastPhoneLast4 = '';
+      window._pendingExtraPass = null;
+      scrollToPageTop();
+      setTimeout(function () {
+        isPageResetting = false;
+      }, 600);
     }
 
     function clearPhoneInput() {
@@ -393,14 +458,13 @@
       autoCloseCountdownTimer = setInterval(function () {
         sec -= 1;
         if (sec <= 0) {
-          stopAutoCloseCountdown();
-          location.reload();
+          resetPageForNextGuest();
           return;
         }
         paintAutoCloseLine(sec);
       }, 1000);
       autoRefreshTimer = setTimeout(function () {
-        location.reload();
+        resetPageForNextGuest();
       }, AUTO_CLOSE_SEC * 1000);
     }
 
@@ -488,6 +552,7 @@
     function showQuickAttendFeedback(result) {
       hideStatus();
       renderMemberStats(result, { startAutoClose: true });
+      scrollToPageBottom();
     }
 
     function finalizeAttendSuccess(result, syncResult) {
@@ -664,6 +729,7 @@
       const suffix = getPhoneSuffix8();
       if (suffix.length !== 8) return;
       lastPhoneSuffix8 = suffix;
+      scrollToPageBottom();
       doAttend(suffix, '');
     }
 
