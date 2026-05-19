@@ -543,8 +543,8 @@
       startAutoCloseCountdown();
     }
 
+    /** 회원 보조 패널만 비움. statusLine 자동 닫힘 카운트다운은 건드리지 않음(오류 안내 직후 hide 호출 시 타이머 유지). */
     function hideMemberStats() {
-      stopAutoCloseCountdown();
       var el = document.getElementById('memberStats');
       el.classList.remove('visible');
       el.innerHTML = '';
