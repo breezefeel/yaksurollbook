@@ -110,15 +110,27 @@
 
     .status-line {
       margin: 0 0 14px;
-      display: none;
+      display: block;
       padding: 14px;
       border-radius: 14px;
-      background: #F8FAFC;
+      background: #FFF1F2;
+      border: 1px solid #FECDD3;
       line-height: 1.6;
       font-size: 15px;
       text-align: center;
     }
-    .status-line.visible { display: block; }
+    .status-line .welcome-line1 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #9D174D;
+      letter-spacing: 0.02em;
+    }
+    .status-line .welcome-line2 {
+      margin-top: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #BE185D;
+    }
     .status-line .record-est {
       display: block;
       margin-top: 8px;
@@ -268,7 +280,10 @@
     <h1>🌸 출석 체크</h1>
     <p class="subtitle">전화번호 8자리</p>
 
-    <div class="status-line" id="statusLine" aria-live="polite"></div>
+    <div class="status-line" id="statusLine" aria-live="polite">
+      <p class="welcome-line1">어서오세요!</p>
+      <p class="welcome-line2">따뜻하게 환영합니다. 🌸</p>
+    </div>
 
     <div class="member-stats" id="memberStats" aria-live="polite"></div>
 
@@ -342,6 +357,10 @@
     const AUTO_CLOSE_SEC = 30;
     /** 출석 응답 직후 회차·소진 안내를 함께 표시 (백그라운드 동기화 대기 없음) */
     const POST_ATTEND_NOTICE_DELAY_MS = 250;
+
+    const WELCOME_STATUS_HTML =
+      '<p class="welcome-line1">어서오세요!</p>' +
+      '<p class="welcome-line2">따뜻하게 환영합니다. 🌸</p>';
 
     const digits = ['', '', '', '', '', '', '', ''];
     let activeSegment = 'mid';
@@ -444,21 +463,21 @@
       document.getElementById('pickerWrap').innerHTML = '';
     }
 
+    function showWelcomeStatus() {
+      stopRecordingCountdown();
+      stopAutoCloseCountdown();
+      var el = document.getElementById('statusLine');
+      el.innerHTML = WELCOME_STATUS_HTML;
+    }
+
     function showStatus(html, keepVisible) {
       var el = document.getElementById('statusLine');
       el.innerHTML = html;
-      el.classList.add('visible');
-      if (!keepVisible) el.classList.add('visible');
+      if (!keepVisible) stopAutoCloseCountdown();
     }
 
     function hideStatus() {
-      stopRecordingCountdown();
-      var el = document.getElementById('statusLine');
-      if (el.querySelector('#autoCloseLine')) {
-        stopAutoCloseCountdown();
-      }
-      el.classList.remove('visible');
-      el.innerHTML = '';
+      showWelcomeStatus();
     }
 
     function autoCloseLineHtml() {
@@ -477,7 +496,6 @@
       var el = document.getElementById('statusLine');
       var footer = options.showAutoClose === false ? '' : autoCloseLineHtml();
       el.innerHTML = html + footer;
-      el.classList.add('visible');
       if (options.showAutoClose !== false) {
         startAutoCloseCountdown();
       }
@@ -491,7 +509,7 @@
       if (!line) {
         if (statsEl.classList.contains('visible')) {
           statsEl.insertAdjacentHTML('beforeend', autoCloseLineHtml());
-        } else if (statusEl.classList.contains('visible')) {
+        } else if (statusEl.innerHTML && !statusEl.querySelector('.welcome-line1')) {
           statusEl.insertAdjacentHTML('beforeend', autoCloseLineHtml());
         } else {
           return;
@@ -576,7 +594,6 @@
           '<span class="record-count">' +
           sec +
           '</span>';
-        el.classList.add('visible');
       }
       paint();
       recordingCountdownTimer = setInterval(function () {
@@ -871,6 +888,7 @@
     }
 
     renderDigits();
+    showWelcomeStatus();
   </script>
 </body>
 </html>
