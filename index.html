@@ -154,6 +154,34 @@
       font-weight: 800;
       color: #9D174D;
     }
+    .status-line .result-line1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: #9D174D;
+      letter-spacing: 0.02em;
+    }
+    .status-line .result-line2 {
+      margin-top: 10px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #475569;
+    }
+    .status-line .post-notice {
+      margin-top: 12px;
+      padding: 12px 10px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.55;
+      color: #9D174D;
+      background: #fff;
+      border: 1px solid #fecdd3;
+    }
+    .status-line .post-notice-done {
+      color: #9f1239;
+      background: #ffe4e6;
+      border-color: #fda4af;
+    }
 
     .member-stats {
       display: none;
@@ -501,15 +529,12 @@
       }
     }
 
-    /** memberStats 또는 statusLine에 카운트다운이 없으면 붙이고 타이머 시작 */
+    /** statusLine(회차 안내)에 카운트다운이 없으면 붙이고 타이머 시작 */
     function startAutoCloseCountdownAfterFeedback_() {
       var line = document.getElementById('autoCloseLine');
-      var statsEl = document.getElementById('memberStats');
       var statusEl = document.getElementById('statusLine');
       if (!line) {
-        if (statsEl.classList.contains('visible')) {
-          statsEl.insertAdjacentHTML('beforeend', autoCloseLineHtml());
-        } else if (statusEl.innerHTML && !statusEl.querySelector('.welcome-line1')) {
+        if (statusEl && statusEl.querySelector('.result-line1')) {
           statusEl.insertAdjacentHTML('beforeend', autoCloseLineHtml());
         } else {
           return;
@@ -573,6 +598,13 @@
       return attend + '회차 / 총' + total + '회';
     }
 
+    function formatMemberRemainLine_(data) {
+      var name = String((data && data.memberName) || currentUserName || '').trim();
+      var remain = data && data.remaining != null ? data.remaining : '-';
+      if (name) return name + '님, 남은 횟수 ' + remain + '회';
+      return '남은 횟수 ' + remain + '회';
+    }
+
     function stopRecordingCountdown() {
       if (recordingCountdownTimer) {
         clearInterval(recordingCountdownTimer);
@@ -634,24 +666,24 @@
 
     function renderMemberStats(data, options) {
       options = options || {};
-      const el = document.getElementById('memberStats');
+      hideMemberStats();
+      const el = document.getElementById('statusLine');
       if (!data || (data.payRounds == null && data.attendCount == null)) {
-        hideMemberStats();
+        showWelcomeStatus();
         return;
       }
-      var remain = data.remaining != null ? data.remaining : '-';
+      stopRecordingCountdown();
       var noticeHtml = options.includePostNotice ? buildPostAttendNoticeHtml_(data) : '';
       var line3 = options.showAutoClose === false ? '' : autoCloseLineHtml();
       el.innerHTML =
         '<p class="result-line1">' +
         formatResultLine1(data) +
         '</p>' +
-        '<p class="result-line2">남은 횟수 ' +
-        remain +
-        '회</p>' +
+        '<p class="result-line2">' +
+        formatMemberRemainLine_(data) +
+        '</p>' +
         noticeHtml +
         line3;
-      el.classList.add('visible');
       if (options.showAutoClose !== false && options.startAutoClose !== false) {
         startAutoCloseCountdown();
       } else if (options.showAutoClose !== false) {
@@ -660,7 +692,6 @@
     }
 
     function showQuickAttendFeedback(result) {
-      hideStatus();
       renderMemberStats(result, { startAutoClose: true, includePostNotice: true });
       setTimeout(function () {
         handlePostAttendModals(result, { immediate: true });
@@ -670,15 +701,14 @@
 
     function finalizeAttendSuccess(result, syncResult) {
       stopRecordingCountdown();
-      hideStatus();
       var merged =
         syncResult && (syncResult.sessionDisplay || syncResult.attendCount != null)
           ? Object.assign({}, result, syncResult)
           : result;
       renderMemberStats(merged, { startAutoClose: false });
       if (syncResult && !syncResult.success && syncResult.message) {
-        var panelSync = document.getElementById('memberStats');
-        if (panelSync && panelSync.classList.contains('visible')) {
+        var panelSync = document.getElementById('statusLine');
+        if (panelSync && panelSync.querySelector('.result-line1')) {
           panelSync.insertAdjacentHTML(
             'beforeend',
             '<p style="margin-top:12px;font-size:14px;color:#b45309;">스케줄표 반영: ' +
@@ -688,8 +718,8 @@
         }
       }
       if (result.rollbookBanner) {
-        var panel = document.getElementById('memberStats');
-        if (panel && panel.classList.contains('visible') && !panel.querySelector('[data-rollbook-banner]')) {
+        var panel = document.getElementById('statusLine');
+        if (panel && panel.querySelector('.result-line1') && !panel.querySelector('[data-rollbook-banner]')) {
           panel.insertAdjacentHTML('beforeend', buildPostAttendNoticeHtml_(result));
         }
       }
