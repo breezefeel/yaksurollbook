@@ -132,10 +132,20 @@
       letter-spacing: 0.05em;
       margin-top: 4px;
     }
+    .status-line .result-line3 {
+      margin-top: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+    .status-line .result-line3 .auto-close-sec {
+      font-weight: 800;
+      color: #9D174D;
+    }
 
     .member-stats {
       display: none;
-      margin-top: 16px;
+      margin: 0 0 14px;
       padding: 16px 14px;
       border-radius: 14px;
       background: #F8FAFC;
@@ -164,6 +174,22 @@
     .member-stats .result-line3 .auto-close-sec {
       font-weight: 800;
       color: #9D174D;
+    }
+    .member-stats .post-notice {
+      margin-top: 12px;
+      padding: 12px 10px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.55;
+      color: #9D174D;
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+    }
+    .member-stats .post-notice-done {
+      color: #9f1239;
+      background: #ffe4e6;
+      border-color: #fda4af;
     }
 
     .picker-btns { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
@@ -244,6 +270,8 @@
 
     <div class="status-line" id="statusLine" aria-live="polite"></div>
 
+    <div class="member-stats" id="memberStats" aria-live="polite"></div>
+
     <div class="phone-display" aria-label="전화번호 입력">
       <span class="phone-prefix">010</span>
       <div class="phone-segment active" id="segMid" aria-hidden="true">
@@ -274,7 +302,6 @@
       <button type="button" class="key-back" data-key="back" aria-label="지우기">←</button>
     </div>
 
-    <div class="member-stats" id="memberStats" aria-live="polite"></div>
     <div id="pickerWrap"></div>
   </div>
 
@@ -313,6 +340,8 @@
     let isPageResetting = false;
     const BACKGROUND_EST_SEC = 5;
     const AUTO_CLOSE_SEC = 30;
+    /** 출석 응답 직후 회차·소진 안내를 함께 표시 (백그라운드 동기화 대기 없음) */
+    const POST_ATTEND_NOTICE_DELAY_MS = 250;
 
     const digits = ['', '', '', '', '', '', '', ''];
     let activeSegment = 'mid';
@@ -378,6 +407,7 @@
       lastPhoneSuffix8 = '';
       lastPhoneLast4 = '';
       window._pendingExtraPass = null;
+      window._postAttendHandled = false;
       scrollToPageTop();
       setTimeout(function () {
         isPageResetting = false;
@@ -424,8 +454,50 @@
     function hideStatus() {
       stopRecordingCountdown();
       var el = document.getElementById('statusLine');
+      if (el.querySelector('#autoCloseLine')) {
+        stopAutoCloseCountdown();
+      }
       el.classList.remove('visible');
       el.innerHTML = '';
+    }
+
+    function autoCloseLineHtml() {
+      return (
+        '<p class="result-line3" id="autoCloseLine">자동 닫힘 <span class="auto-close-sec">' +
+        AUTO_CLOSE_SEC +
+        '</span>초 후</p>'
+      );
+    }
+
+    /** 상태 메시지 + 30초 후 자동 리셋 (오류·안내 등) */
+    function showStatusWithAutoReset(html, options) {
+      options = options || {};
+      stopAutoCloseCountdown();
+      stopRecordingCountdown();
+      var el = document.getElementById('statusLine');
+      var footer = options.showAutoClose === false ? '' : autoCloseLineHtml();
+      el.innerHTML = html + footer;
+      el.classList.add('visible');
+      if (options.showAutoClose !== false) {
+        startAutoCloseCountdown();
+      }
+    }
+
+    /** memberStats 또는 statusLine에 카운트다운이 없으면 붙이고 타이머 시작 */
+    function startAutoCloseCountdownAfterFeedback_() {
+      var line = document.getElementById('autoCloseLine');
+      var statsEl = document.getElementById('memberStats');
+      var statusEl = document.getElementById('statusLine');
+      if (!line) {
+        if (statsEl.classList.contains('visible')) {
+          statsEl.insertAdjacentHTML('beforeend', autoCloseLineHtml());
+        } else if (statusEl.classList.contains('visible')) {
+          statusEl.insertAdjacentHTML('beforeend', autoCloseLineHtml());
+        } else {
+          return;
+        }
+      }
+      startAutoCloseCountdown();
     }
 
     function hideMemberStats() {
@@ -520,6 +592,29 @@
       }, 1000);
     }
 
+    function buildPostAttendNoticeHtml_(result) {
+      if (!result) return '';
+      var rem = Number(result.remaining);
+      if (result.rollbookBanner) {
+        var cls = rem <= 0 ? 'post-notice post-notice-done' : 'post-notice';
+        return (
+          '<p class="' +
+          cls +
+          '" data-rollbook-banner="1">' +
+          result.rollbookBanner +
+          '</p>'
+        );
+      }
+      if (rem <= 0) {
+        return (
+          '<p class="post-notice post-notice-done" data-rollbook-banner="1">' +
+          '모든 회차를 소모하셨습니다. 감사합니다!' +
+          '</p>'
+        );
+      }
+      return '';
+    }
+
     function renderMemberStats(data, options) {
       options = options || {};
       const el = document.getElementById('memberStats');
@@ -528,12 +623,8 @@
         return;
       }
       var remain = data.remaining != null ? data.remaining : '-';
-      var line3 =
-        options.showAutoClose === false
-          ? ''
-          : '<p class="result-line3" id="autoCloseLine">자동 닫힘 <span class="auto-close-sec">' +
-            AUTO_CLOSE_SEC +
-            '</span>초 후</p>';
+      var noticeHtml = options.includePostNotice ? buildPostAttendNoticeHtml_(data) : '';
+      var line3 = options.showAutoClose === false ? '' : autoCloseLineHtml();
       el.innerHTML =
         '<p class="result-line1">' +
         formatResultLine1(data) +
@@ -541,6 +632,7 @@
         '<p class="result-line2">남은 횟수 ' +
         remain +
         '회</p>' +
+        noticeHtml +
         line3;
       el.classList.add('visible');
       if (options.showAutoClose !== false && options.startAutoClose !== false) {
@@ -552,8 +644,11 @@
 
     function showQuickAttendFeedback(result) {
       hideStatus();
-      renderMemberStats(result, { startAutoClose: true });
-      scrollToPageBottom();
+      renderMemberStats(result, { startAutoClose: true, includePostNotice: true });
+      setTimeout(function () {
+        handlePostAttendModals(result, { immediate: true });
+      }, POST_ATTEND_NOTICE_DELAY_MS);
+      scrollToPageTop();
     }
 
     function finalizeAttendSuccess(result, syncResult) {
@@ -565,25 +660,23 @@
           : result;
       renderMemberStats(merged, { startAutoClose: false });
       if (syncResult && !syncResult.success && syncResult.message) {
-        var line3 = document.getElementById('autoCloseLine');
-        if (line3) {
-          line3.innerHTML =
-            '<span style="color:#b45309;font-size:14px;">스케줄표 반영: ' +
-            syncResult.message +
-            '</span>';
-        }
-      }
-      if (result.rollbookBanner) {
-        var panel = document.getElementById('memberStats');
-        if (panel && panel.classList.contains('visible')) {
-          panel.insertAdjacentHTML(
+        var panelSync = document.getElementById('memberStats');
+        if (panelSync && panelSync.classList.contains('visible')) {
+          panelSync.insertAdjacentHTML(
             'beforeend',
-            '<p style="margin-top:12px;padding:10px;border-radius:10px;background:#fff1f2;border:1px solid #fecdd3;color:#444;font-size:13px;line-height:1.5;">' +
-              result.rollbookBanner +
+            '<p style="margin-top:12px;font-size:14px;color:#b45309;">스케줄표 반영: ' +
+              syncResult.message +
               '</p>'
           );
         }
       }
+      if (result.rollbookBanner) {
+        var panel = document.getElementById('memberStats');
+        if (panel && panel.classList.contains('visible') && !panel.querySelector('[data-rollbook-banner]')) {
+          panel.insertAdjacentHTML('beforeend', buildPostAttendNoticeHtml_(result));
+        }
+      }
+      startAutoCloseCountdownAfterFeedback_();
     }
 
     async function runBackgroundScheduleSync(phoneSuffix8, phoneHint, confirmExtraPass, result) {
@@ -603,7 +696,7 @@
         });
         const syncResult = await response.json();
         finalizeAttendSuccess(result, syncResult);
-        handlePostAttendModals(result);
+        handlePostAttendModals(result, { skipIfHandled: true });
       } catch (e) {
         finalizeAttendSuccess(result, { success: false, message: '네트워크 오류' });
       } finally {
@@ -612,21 +705,22 @@
       }
     }
 
-    function handlePostAttendModals(result) {
+    function handlePostAttendModals(result, options) {
+      options = options || {};
+      if (options.skipIfHandled && window._postAttendHandled) return;
+
       const rem = Number(result.remaining);
       if (result.showExtensionModal) {
         stopAutoCloseCountdown();
-        showModal('앞으로 <strong>' + rem + '회</strong>의 잔여 회차가 남았습니다.<br>미리 연장하시겠습니까? 🌸');
-      } else if (rem <= 0) {
-        stopAutoCloseCountdown();
-        if (result.bannerKind === 'red_last') {
-          setTimeout(function () { location.reload(); }, 2800);
-        } else {
-          setTimeout(function () {
-            alert('모든 회차를 소모하셨습니다. 감사합니다!');
-            location.reload();
-          }, 1000);
-        }
+        showModal(
+          '앞으로 <strong>' + rem + '회</strong>의 잔여 회차가 남았습니다.<br>미리 연장하시겠습니까? 🌸'
+        );
+        window._postAttendHandled = true;
+        return;
+      }
+
+      if (rem <= 0) {
+        window._postAttendHandled = true;
       }
     }
 
@@ -692,7 +786,7 @@
           const msg = result.duplicateBlocked
             ? '⏳ ' + (result.message || '방금 출석 처리되었습니다.')
             : '❌ ' + (result.message || '처리할 수 없습니다.');
-          showStatus(msg);
+          showStatusWithAutoReset(msg);
           if (result.payRounds != null || result.attendCount != null) {
             renderMemberStats(result, { showAutoClose: false });
           } else {
@@ -719,7 +813,7 @@
         return;
       } catch (e) {
         stopRecordingCountdown();
-        showStatus('❌ 오류가 발생했습니다.');
+        showStatusWithAutoReset('❌ 오류가 발생했습니다.');
         hideMemberStats();
         clearPhoneInput();
         isSubmitting = false;
@@ -730,7 +824,6 @@
       const suffix = getPhoneSuffix8();
       if (suffix.length !== 8) return;
       lastPhoneSuffix8 = suffix;
-      scrollToPageBottom();
       doAttend(suffix, '');
     }
 
