@@ -4,17 +4,71 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>출석 체크</title>
+  <script>
+    (function () {
+      var m = new Date().getMonth() + 1;
+      var season = (m >= 3 && m <= 5) ? 'spring'
+        : (m >= 6 && m <= 8) ? 'summer'
+        : (m >= 9 && m <= 11) ? 'autumn'
+        : 'winter';
+      document.documentElement.setAttribute('data-season', season);
+    })();
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    /* 계절 테마 (3~5 봄 / 6~8 여름 / 9~11 가을 / 12~2 겨울) */
+    html[data-season="spring"] {
+      --bg-start: #FFF1F2; --bg-end: #FFE4E6;
+      --primary: #9D174D; --secondary: #BE185D; --accent: #FB7185;
+      --text-dark: #831843; --text-muted: #FDA4AF;
+      --surface: #FFF1F2; --surface-alt: #FFF9FA; --surface-active: #FFE4E6;
+      --border: #FECDD3; --border-filled: #F9A8D4;
+      --shadow: rgba(251, 113, 133, 0.2);
+      --focus-ring: rgba(251, 113, 133, 0.2);
+      --notice-done-bg: #ffe4e6; --notice-done-color: #9f1239; --notice-done-border: #fda4af;
+    }
+    html[data-season="summer"] {
+      --bg-start: #ECFEFF; --bg-end: #CFFAFE;
+      --primary: #0E7490; --secondary: #0891B2; --accent: #06B6D4;
+      --text-dark: #164E63; --text-muted: #67E8F9;
+      --surface: #F0FDFA; --surface-alt: #F0FDFA; --surface-active: #CCFBF1;
+      --border: #A5F3FC; --border-filled: #22D3EE;
+      --shadow: rgba(6, 182, 212, 0.22);
+      --focus-ring: rgba(6, 182, 212, 0.25);
+      --notice-done-bg: #CFFAFE; --notice-done-color: #155E75; --notice-done-border: #67E8F9;
+    }
+    html[data-season="autumn"] {
+      --bg-start: #FFFBEB; --bg-end: #FEF3C7;
+      --primary: #9A3412; --secondary: #C2410C; --accent: #F59E0B;
+      --text-dark: #78350F; --text-muted: #FDBA74;
+      --surface: #FFFBEB; --surface-alt: #FFFAF0; --surface-active: #FDE68A;
+      --border: #FDE68A; --border-filled: #FBBF24;
+      --shadow: rgba(245, 158, 11, 0.22);
+      --focus-ring: rgba(245, 158, 11, 0.25);
+      --notice-done-bg: #FEF3C7; --notice-done-color: #92400E; --notice-done-border: #FCD34D;
+    }
+    html[data-season="winter"] {
+      --bg-start: #F0F9FF; --bg-end: #E0E7FF;
+      --primary: #1E3A8A; --secondary: #3730A3; --accent: #6366F1;
+      --text-dark: #1E3A8A; --text-muted: #93C5FD;
+      --surface: #EFF6FF; --surface-alt: #F8FAFC; --surface-active: #DBEAFE;
+      --border: #BFDBFE; --border-filled: #818CF8;
+      --shadow: rgba(99, 102, 241, 0.22);
+      --focus-ring: rgba(99, 102, 241, 0.25);
+      --notice-done-bg: #DBEAFE; --notice-done-color: #1E40AF; --notice-done-border: #93C5FD;
+    }
+
     body {
       font-family: -apple-system, 'Malgun Gothic', sans-serif;
-      background: linear-gradient(135deg, #FFF1F2 0%, #FFE4E6 100%);
+      background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 100%);
       min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: flex-start;
       padding: 12px;
       touch-action: manipulation;
+      transition: background 0.6s ease;
     }
     .container {
       max-width: 420px;
@@ -23,10 +77,11 @@
       border-radius: 25px;
       padding: 32px 22px 26px;
       text-align: center;
-      box-shadow: 0 15px 35px rgba(251, 113, 133, 0.2);
+      box-shadow: 0 15px 35px var(--shadow);
+      transition: box-shadow 0.6s ease;
     }
-    h1 { color: #9D174D; margin-bottom: 6px; font-size: 30px; font-weight: 800; }
-    .subtitle { color: #BE185D; margin-bottom: 10px; font-weight: 600; font-size: 15px; }
+    h1 { color: var(--primary); margin-bottom: 6px; font-size: 30px; font-weight: 800; }
+    .subtitle { color: var(--secondary); margin-bottom: 10px; font-weight: 600; font-size: 15px; }
 
     .phone-display {
       display: flex;
@@ -41,29 +96,29 @@
     .phone-prefix {
       font-size: 22px;
       font-weight: 800;
-      color: #9D174D;
+      color: var(--primary);
       padding: 12px 10px;
-      background: #FFF1F2;
+      background: var(--surface);
       border-radius: 12px;
-      border: 2px solid #FECDD3;
+      border: 2px solid var(--border);
       min-width: 58px;
     }
     .phone-segment {
       display: flex;
       gap: 5px;
       padding: 10px 8px;
-      border: 2.5px solid #FECDD3;
+      border: 2.5px solid var(--border);
       border-radius: 12px;
-      background: #FFF9FA;
+      background: var(--surface-alt);
       min-width: 108px;
       justify-content: center;
       transition: border-color 0.2s, box-shadow 0.2s;
     }
     .phone-segment.active {
-      border-color: #FB7185;
-      box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.2);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--focus-ring);
     }
-    .phone-segment.filled { border-color: #F9A8D4; }
+    .phone-segment.filled { border-color: var(--border-filled); }
     .phone-digit {
       width: 22px;
       height: 32px;
@@ -72,10 +127,10 @@
       justify-content: center;
       font-size: 26px;
       font-weight: 800;
-      color: #831843;
+      color: var(--text-dark);
     }
     .phone-digit.empty {
-      color: #FDA4AF;
+      color: var(--text-muted);
       font-weight: 400;
     }
 
@@ -91,21 +146,21 @@
       padding: 20px 0;
       font-size: 28px;
       font-weight: 800;
-      color: #831843;
-      background: #FFF1F2;
-      border: 2px solid #FECDD3;
+      color: var(--text-dark);
+      background: var(--surface);
+      border: 2px solid var(--border);
       cursor: pointer;
       transition: transform 0.08s, background 0.15s;
       user-select: none;
     }
     .keypad button:active {
       transform: scale(0.96);
-      background: #FFE4E6;
+      background: var(--surface-active);
     }
     .keypad .key-zero { grid-column: 2; }
     .key-back {
       font-size: 22px !important;
-      color: #9D174D !important;
+      color: var(--primary) !important;
     }
 
     .status-line {
@@ -113,8 +168,8 @@
       display: block;
       padding: 14px;
       border-radius: 14px;
-      background: #FFF1F2;
-      border: 1px solid #FECDD3;
+      background: var(--surface);
+      border: 1px solid var(--border);
       line-height: 1.6;
       font-size: 15px;
       text-align: center;
@@ -122,21 +177,21 @@
     .status-line .welcome-line1 {
       font-size: 22px;
       font-weight: 800;
-      color: #9D174D;
+      color: var(--primary);
       letter-spacing: 0.02em;
     }
     .status-line .welcome-line2 {
       margin-top: 8px;
       font-size: 16px;
       font-weight: 600;
-      color: #BE185D;
+      color: var(--secondary);
     }
     .status-line .record-est {
       display: block;
       margin-top: 8px;
       font-size: 15px;
       font-weight: 700;
-      color: #9D174D;
+      color: var(--primary);
     }
     .status-line .record-count {
       font-size: 28px;
@@ -152,12 +207,12 @@
     }
     .status-line .result-line3 .auto-close-sec {
       font-weight: 800;
-      color: #9D174D;
+      color: var(--primary);
     }
     .status-line .result-line1 {
       font-size: 24px;
       font-weight: 800;
-      color: #9D174D;
+      color: var(--primary);
       letter-spacing: 0.02em;
     }
     .status-line .result-line2 {
@@ -173,14 +228,14 @@
       font-size: 15px;
       font-weight: 700;
       line-height: 1.55;
-      color: #9D174D;
+      color: var(--primary);
       background: #fff;
-      border: 1px solid #fecdd3;
+      border: 1px solid var(--border);
     }
     .status-line .post-notice-done {
-      color: #9f1239;
-      background: #ffe4e6;
-      border-color: #fda4af;
+      color: var(--notice-done-color);
+      background: var(--notice-done-bg);
+      border-color: var(--notice-done-border);
     }
 
     .member-stats {
@@ -196,7 +251,7 @@
     .member-stats .result-line1 {
       font-size: 24px;
       font-weight: 800;
-      color: #9D174D;
+      color: var(--primary);
       letter-spacing: 0.02em;
     }
     .member-stats .result-line2 {
@@ -213,7 +268,7 @@
     }
     .member-stats .result-line3 .auto-close-sec {
       font-weight: 800;
-      color: #9D174D;
+      color: var(--primary);
     }
     .member-stats .post-notice {
       margin-top: 12px;
@@ -222,27 +277,27 @@
       font-size: 15px;
       font-weight: 700;
       line-height: 1.55;
-      color: #9D174D;
-      background: #fff1f2;
-      border: 1px solid #fecdd3;
+      color: var(--primary);
+      background: var(--surface);
+      border: 1px solid var(--border);
     }
     .member-stats .post-notice-done {
-      color: #9f1239;
-      background: #ffe4e6;
-      border-color: #fda4af;
+      color: var(--notice-done-color);
+      background: var(--notice-done-bg);
+      border-color: var(--notice-done-border);
     }
 
     .picker-btns { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
     .picker-btns button {
       padding: 16px;
-      border: 2px solid #FECDD3;
+      border: 2px solid var(--border);
       border-radius: 12px;
       font-size: 17px;
       font-weight: 700;
-      background: #FFF9FA;
+      background: var(--surface-alt);
       cursor: pointer;
       width: 100%;
-      color: #831843;
+      color: var(--text-dark);
     }
 
     .modal {
@@ -305,12 +360,12 @@
 <body>
 
   <div class="container">
-    <h1>🌸 출석 체크</h1>
+    <h1 id="pageTitle">출석 체크</h1>
     <p class="subtitle">전화번호 8자리</p>
 
     <div class="status-line" id="statusLine" aria-live="polite">
       <p class="welcome-line1">어서오세요!</p>
-      <p class="welcome-line2">따뜻하게 환영합니다. 🌸</p>
+      <p class="welcome-line2" id="welcomeLine2">따뜻하게 환영합니다.</p>
     </div>
 
     <div class="member-stats" id="memberStats" aria-live="polite"></div>
@@ -372,6 +427,66 @@
   <script>
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbwVJSc6rY5tcBSB1VaRi4DBEXGyUBr1ADFfs6QEA9Z9bu0G-0mdMAv374-MdPVYMnSaeQ/exec';
 
+    /** 계절별 문구·이모지 (월: 3~5 봄, 6~8 여름, 9~11 가을, 12~2 겨울) */
+    const SEASON_CONFIG = {
+      spring: {
+        label: '봄',
+        icon: '🌸',
+        welcome: '따뜻한 봄날, 환영합니다.',
+        extendSuffix: '🌸',
+      },
+      summer: {
+        label: '여름',
+        icon: '☀️',
+        welcome: '시원한 여름, 환영합니다.',
+        extendSuffix: '☀️',
+      },
+      autumn: {
+        label: '가을',
+        icon: '🍂',
+        welcome: '포근한 가을, 환영합니다.',
+        extendSuffix: '🍂',
+      },
+      winter: {
+        label: '겨울',
+        icon: '❄️',
+        welcome: '따뜻한 겨울, 환영합니다.',
+        extendSuffix: '❄️',
+      },
+    };
+
+    function getCurrentSeason() {
+      var m = new Date().getMonth() + 1;
+      if (m >= 3 && m <= 5) return 'spring';
+      if (m >= 6 && m <= 8) return 'summer';
+      if (m >= 9 && m <= 11) return 'autumn';
+      return 'winter';
+    }
+
+    function getSeasonConfig() {
+      return SEASON_CONFIG[getCurrentSeason()] || SEASON_CONFIG.spring;
+    }
+
+    function applySeasonTheme() {
+      var season = getCurrentSeason();
+      var cfg = getSeasonConfig();
+      document.documentElement.setAttribute('data-season', season);
+      var titleEl = document.getElementById('pageTitle');
+      if (titleEl) titleEl.textContent = cfg.icon + ' 출석 체크';
+      var welcomeEl = document.getElementById('welcomeLine2');
+      if (welcomeEl) welcomeEl.textContent = cfg.welcome + ' ' + cfg.icon;
+    }
+
+    function getWelcomeStatusHtml() {
+      var cfg = getSeasonConfig();
+      return (
+        '<p class="welcome-line1">어서오세요!</p>' +
+        '<p class="welcome-line2">' + cfg.welcome + ' ' + cfg.icon + '</p>'
+      );
+    }
+
+    applySeasonTheme();
+
     let currentUserName = '';
     let lastPhoneSuffix8 = '';
     let lastPhoneLast4 = '';
@@ -385,10 +500,6 @@
     const AUTO_CLOSE_SEC = 30;
     /** 출석 응답 직후 회차·소진 안내를 함께 표시 (백그라운드 동기화 대기 없음) */
     const POST_ATTEND_NOTICE_DELAY_MS = 250;
-
-    const WELCOME_STATUS_HTML =
-      '<p class="welcome-line1">어서오세요!</p>' +
-      '<p class="welcome-line2">따뜻하게 환영합니다. 🌸</p>';
 
     const digits = ['', '', '', '', '', '', '', ''];
     let activeSegment = 'mid';
@@ -495,7 +606,7 @@
       stopRecordingCountdown();
       stopAutoCloseCountdown();
       var el = document.getElementById('statusLine');
-      el.innerHTML = WELCOME_STATUS_HTML;
+      el.innerHTML = getWelcomeStatusHtml();
     }
 
     function showStatus(html, keepVisible) {
@@ -760,7 +871,7 @@
       if (result.showExtensionModal) {
         stopAutoCloseCountdown();
         showModal(
-          '앞으로 <strong>' + rem + '회</strong>의 잔여 회차가 남았습니다.<br>미리 연장하시겠습니까? 🌸'
+          '앞으로 <strong>' + rem + '회</strong>의 잔여 회차가 남았습니다.<br>미리 연장하시겠습니까? ' + getSeasonConfig().extendSuffix
         );
         window._postAttendHandled = true;
         return;
