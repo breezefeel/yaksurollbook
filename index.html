@@ -500,6 +500,8 @@
     const AUTO_CLOSE_SEC = 30;
     /** 출석 응답 직후 회차·소진 안내를 함께 표시 (백그라운드 동기화 대기 없음) */
     const POST_ATTEND_NOTICE_DELAY_MS = 250;
+    /** 서버 8시 캐시 — 당일 예약 회원 즉시 배너용 */
+    let rollbookDayCache = { date: '', builtAt: '', bySuffix8: {} };
 
     const digits = ['', '', '', '', '', '', '', ''];
     let activeSegment = 'mid';
@@ -752,6 +754,74 @@
       }, 1000);
     }
 
+    function loadRollbookDayCache() {
+      return fetch(scriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'rollbookDayCache' }),
+      })
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          if (data && data.success) {
+            rollbookDayCache = {
+              date: data.date || '',
+              builtAt: data.builtAt || '',
+              bySuffix8: data.bySuffix8 || {},
+            };
+          }
+        })
+        .catch(function () {});
+    }
+
+    function buildPreviewFromDayCache(suffix8) {
+      var s8 = String(suffix8 || '').replace(/\D/g, '').slice(-8);
+      if (s8.length !== 8) return null;
+      var entry = rollbookDayCache.bySuffix8[s8];
+      if (!entry) return null;
+
+      var pay = entry.payRounds || 1;
+      var attend = (entry.attend || 0) + 1;
+      var remain = Math.max(0, pay - attend);
+      var prevQuit = !!entry.prevQuit;
+      var result = {
+        success: true,
+        optimistic: true,
+        memberName: entry.name,
+        remaining: remain,
+        attendCount: attend,
+        payRounds: pay,
+        sessionDisplay: attend + '/' + pay,
+        phoneLast4: entry.last4 || s8.slice(-4),
+        showExtensionModal: false,
+        rollbookBanner: '',
+        bannerKind: '',
+      };
+
+      if (prevQuit) {
+        if (remain === 0) {
+          result.rollbookBanner =
+            '마지막 회차까지 함께해 주셔서 진심으로 감사드립니다. 그동안 맡겨 주셔서 감사했고, 앞으로도 건강하고 편안한 나날 되시길 바랍니다.';
+        } else {
+          result.rollbookBanner =
+            '지난번에는 연장 없이 이용을 마무리하시기로 하셨어요. 생각이 바뀌시거나 일정이 달라지시면 언제든 프런트에 편히 말씀 주세요. 오늘도 좋은 시간 되세요!';
+        }
+      } else if (remain === 1 || remain === 2) {
+        result.showExtensionModal = true;
+      }
+      return result;
+    }
+
+    function patchLocalDayCacheAfterAttend_(suffix8, result) {
+      var s8 = String(suffix8 || '').replace(/\D/g, '').slice(-8);
+      var entry = rollbookDayCache.bySuffix8[s8];
+      if (!entry || !result || result.attendCount == null) return;
+      entry.attend = result.attendCount;
+      entry.remain = result.remaining;
+      entry.payRounds = result.payRounds;
+    }
+
     function buildPostAttendNoticeHtml_(result) {
       if (!result) return '';
       var rem = Number(result.remaining);
@@ -886,8 +956,17 @@
       if (isSubmitting && !confirmExtraPass) return;
       isSubmitting = true;
 
-      showRecordingStatus();
-      hideMemberStats();
+      var suffixNorm = String(phoneSuffix8 || lastPhoneSuffix8 || '').replace(/\D/g, '').slice(-8);
+      var optimisticPreview =
+        !confirmExtraPass && suffixNorm.length === 8 ? buildPreviewFromDayCache(suffixNorm) : null;
+
+      if (optimisticPreview) {
+        showQuickAttendFeedback(optimisticPreview);
+        clearPhoneInput();
+      } else {
+        showRecordingStatus();
+        hideMemberStats();
+      }
       document.getElementById('pickerWrap').innerHTML = '';
 
       try {
@@ -906,6 +985,7 @@
 
         if (!result.success && result.needPhoneSelect) {
           stopRecordingCountdown();
+          if (optimisticPreview) hideMemberStats();
           showStatus('🔍 ' + (result.message || '회원을 선택해 주세요.'));
           const wrap = document.getElementById('pickerWrap');
           wrap.innerHTML = '<div class="picker-btns"></div>';
@@ -927,6 +1007,7 @@
 
         if (!result.success && result.needExtraPassConfirm) {
           stopRecordingCountdown();
+          if (optimisticPreview) hideMemberStats();
           hideStatus();
           document.getElementById('extraPassModalText').innerHTML =
             result.message || '수강권을 하나 더 사용하시겠습니까?';
@@ -941,6 +1022,7 @@
 
         if (!result.success) {
           stopRecordingCountdown();
+          if (optimisticPreview) hideMemberStats();
           const msg = result.duplicateBlocked
             ? '⏳ ' + (result.message || '방금 출석 처리되었습니다.')
             : '❌ ' + (result.message || '처리할 수 없습니다.');
@@ -959,8 +1041,13 @@
         lastPhoneSuffix8 = phoneSuffix8 || lastPhoneSuffix8;
         lastPhoneLast4 = result.phoneLast4 || phoneHint || '';
 
-        showQuickAttendFeedback(result);
-        clearPhoneInput();
+        patchLocalDayCacheAfterAttend_(suffixNorm, result);
+        if (!optimisticPreview) {
+          showQuickAttendFeedback(result);
+          clearPhoneInput();
+        } else {
+          showQuickAttendFeedback(result);
+        }
 
         runBackgroundScheduleSync(
           phoneSuffix8 || lastPhoneSuffix8,
@@ -971,8 +1058,8 @@
         return;
       } catch (e) {
         stopRecordingCountdown();
-        showStatusWithAutoReset('❌ 오류가 발생했습니다.');
         hideMemberStats();
+        showStatusWithAutoReset('❌ 오류가 발생했습니다.');
         clearPhoneInput();
         isSubmitting = false;
       }
@@ -1030,6 +1117,7 @@
 
     renderDigits();
     showWelcomeStatus();
+    loadRollbookDayCache();
   </script>
 </body>
 </html>
