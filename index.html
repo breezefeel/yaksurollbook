@@ -538,6 +538,7 @@
     let currentUserName = '';
     let lastPhoneSuffix8 = '';
     let lastPhoneLast4 = '';
+    let lastSelectedRowKey = '';
     let autoRefreshTimer = null;
     let autoCloseCountdownTimer = null;
     let isSubmitting = false;
@@ -614,6 +615,7 @@
       currentUserName = '';
       lastPhoneSuffix8 = '';
       lastPhoneLast4 = '';
+      lastSelectedRowKey = '';
       window._pendingExtraPass = null;
       window._postAttendHandled = false;
       scrollToPageTop();
@@ -951,10 +953,12 @@
       startAutoCloseCountdownAfterFeedback_();
     }
 
-    async function runBackgroundScheduleSync(phoneSuffix8, phoneHint, confirmExtraPass, result) {
+    async function runBackgroundScheduleSync(phoneSuffix8, phoneHint, confirmExtraPass, result, selectedRowKey) {
       if (backgroundSyncInFlight) return;
       backgroundSyncInFlight = true;
       try {
+        var safeHint = String((result && result.phoneLast4) || phoneHint || lastPhoneLast4 || '').replace(/\D/g, '').slice(-4);
+        var safeRowKey = String((result && result.rowKey) || selectedRowKey || lastSelectedRowKey || '').trim();
         const response = await fetch(scriptUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -962,7 +966,9 @@
             action: 'rollbookAttendSync',
             phoneSuffix8: String(phoneSuffix8 || '').replace(/\D/g, '').slice(-8),
             phone: '010' + String(phoneSuffix8 || '').replace(/\D/g, '').slice(-8),
-            phoneHint: phoneHint || '',
+            phoneHint: safeHint,
+            memberName: String((result && result.memberName) || currentUserName || '').trim(),
+            selectedRowKey: safeRowKey,
             confirmExtraPass: !!confirmExtraPass,
           }),
         });
@@ -996,13 +1002,15 @@
       }
     }
 
-    async function doAttend(phoneSuffix8, phoneHint, confirmExtraPass) {
+    async function doAttend(phoneSuffix8, phoneHint, confirmExtraPass, selectedRowKey, selectedMemberName) {
       if (isSubmitting && !confirmExtraPass) return;
       isSubmitting = true;
 
       var suffixNorm = String(phoneSuffix8 || lastPhoneSuffix8 || '').replace(/\D/g, '').slice(-8);
       var optimisticPreview =
-        !confirmExtraPass && suffixNorm.length === 8 ? buildPreviewFromDayCache(suffixNorm) : null;
+        !confirmExtraPass && suffixNorm.length === 8 && String(selectedRowKey || '').trim()
+          ? buildPreviewFromDayCache(suffixNorm)
+          : null;
 
       if (optimisticPreview) {
         showQuickAttendFeedback(optimisticPreview);
@@ -1022,6 +1030,8 @@
             phoneSuffix8: String(phoneSuffix8 || lastPhoneSuffix8 || '').replace(/\D/g, '').slice(-8),
             phone: '010' + String(phoneSuffix8 || lastPhoneSuffix8 || '').replace(/\D/g, '').slice(-8),
             phoneHint: phoneHint || '',
+            selectedRowKey: String(selectedRowKey || '').trim(),
+            memberName: String(selectedMemberName || '').trim(),
             confirmExtraPass: !!confirmExtraPass,
           }),
         });
@@ -1041,7 +1051,7 @@
             if (c.name) label += ' · ' + c.name;
             btn.textContent = label;
             btn.onclick = function () {
-              doAttend(phoneSuffix8 || lastPhoneSuffix8, c.last4);
+              doAttend(phoneSuffix8 || lastPhoneSuffix8, c.last4, false, c.rowKey, c.name || '');
             };
             box.appendChild(btn);
           });
@@ -1059,6 +1069,8 @@
           window._pendingExtraPass = {
             phoneSuffix8: phoneSuffix8 || lastPhoneSuffix8,
             phoneHint: phoneHint || '',
+            selectedRowKey: selectedRowKey || '',
+            memberName: selectedMemberName || '',
           };
           isSubmitting = false;
           return;
@@ -1084,6 +1096,7 @@
         currentUserName = result.memberName || currentUserName;
         lastPhoneSuffix8 = phoneSuffix8 || lastPhoneSuffix8;
         lastPhoneLast4 = result.phoneLast4 || phoneHint || '';
+        lastSelectedRowKey = String(result.rowKey || selectedRowKey || '').trim();
 
         patchLocalDayCacheAfterAttend_(suffixNorm, result);
         if (!optimisticPreview) {
@@ -1097,7 +1110,8 @@
           phoneSuffix8 || lastPhoneSuffix8,
           phoneHint || lastPhoneLast4,
           confirmExtraPass,
-          result
+          result,
+          selectedRowKey
         );
         return;
       } catch (e) {
@@ -1113,7 +1127,7 @@
       const suffix = getPhoneSuffix8();
       if (suffix.length !== 8) return;
       lastPhoneSuffix8 = suffix;
-      doAttend(suffix, '');
+      doAttend(suffix, '', false, '', '');
     }
 
     document.querySelectorAll('.keypad button').forEach(function (btn) {
@@ -1137,7 +1151,13 @@
         clearPhoneInput();
         return;
       }
-      await doAttend(pending.phoneSuffix8, pending.phoneHint, true);
+      await doAttend(
+        pending.phoneSuffix8,
+        pending.phoneHint,
+        true,
+        pending.selectedRowKey || '',
+        pending.memberName || ''
+      );
     }
 
     async function handleChoice(choice) {
