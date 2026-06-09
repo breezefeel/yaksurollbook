@@ -546,11 +546,10 @@
     let isSubmitting = false;
     let recordingCountdownTimer = null;
     let backgroundSyncInFlight = false;
+    let backgroundSyncPromise = null;
     let isPageResetting = false;
     const BACKGROUND_EST_SEC = 7;
     const AUTO_CLOSE_SEC = 30;
-    /** 출석 응답 직후 회차·소진 안내를 함께 표시 (백그라운드 동기화 대기 없음) */
-    const POST_ATTEND_NOTICE_DELAY_MS = 250;
     /** 서버 8시 캐시 — 당일 예약 회원 즉시 배너용 */
     let rollbookDayCache = { date: '', builtAt: '', bySuffix8: {} };
 
@@ -614,6 +613,7 @@
       clearPhoneInput();
       isSubmitting = false;
       backgroundSyncInFlight = false;
+      backgroundSyncPromise = null;
       currentUserName = '';
       lastPhoneSuffix8 = '';
       lastPhoneLast4 = '';
@@ -922,9 +922,6 @@
 
     function showQuickAttendFeedback(result) {
       renderMemberStats(result, { startAutoClose: true, includePostNotice: true });
-      setTimeout(function () {
-        handlePostAttendModals(result, { immediate: true });
-      }, POST_ATTEND_NOTICE_DELAY_MS);
       scrollToPageTop();
     }
 
@@ -952,42 +949,106 @@
           panel.insertAdjacentHTML('beforeend', buildPostAttendNoticeHtml_(result));
         }
       }
-      startAutoCloseCountdownAfterFeedback_();
+      if (!result.showExtensionModal && document.getElementById('infoModal').style.display !== 'flex') {
+        startAutoCloseCountdownAfterFeedback_();
+      }
+    }
+
+    function parseRollbookJsonResponse_(response, rawText) {
+      var text = String(rawText || '').trim();
+      if (!text) {
+        throw new Error('서버 응답이 비어 있습니다. (시간 초과 가능)');
+      }
+      try {
+        return JSON.parse(text);
+      } catch (parseErr) {
+        if (text.indexOf('<!DOCTYPE') !== -1 || text.indexOf('<html') !== -1) {
+          throw new Error('서버 시간 초과 또는 웹앱 오류입니다. 잠시 후 다시 시도해 주세요.');
+        }
+        throw new Error(text.length > 120 ? text.slice(0, 120) + '…' : text);
+      }
+    }
+
+    async function postRollbookAction_(payload, retries) {
+      retries = retries == null ? 2 : retries;
+      var lastErr = null;
+      var attempt;
+      for (attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const response = await fetch(scriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload),
+          });
+          const rawText = await response.text();
+          return parseRollbookJsonResponse_(response, rawText);
+        } catch (e) {
+          lastErr = e;
+          if (attempt < retries) {
+            await new Promise(function (resolve) {
+              setTimeout(resolve, 800 * (attempt + 1));
+            });
+          }
+        }
+      }
+      throw lastErr || new Error('네트워크 오류');
+    }
+
+    function runBackgroundMemoSync(phoneSuffix8, result, selectedRowKey) {
+      var safeRowKey = String((result && result.rowKey) || selectedRowKey || lastSelectedRowKey || '').trim();
+      postRollbookAction_(
+        {
+          action: 'rollbookAttendMemoSync',
+          phoneSuffix8: String(phoneSuffix8 || '').replace(/\D/g, '').slice(-8),
+          memberName: String((result && result.memberName) || currentUserName || '').trim(),
+          selectedRowKey: safeRowKey,
+        },
+        0
+      ).catch(function () {});
     }
 
     async function runBackgroundScheduleSync(phoneSuffix8, phoneHint, confirmExtraPass, result, selectedRowKey) {
-      if (backgroundSyncInFlight) return;
+      if (backgroundSyncInFlight && backgroundSyncPromise) return backgroundSyncPromise;
       backgroundSyncInFlight = true;
-      try {
-        var safeHint = String((result && result.phoneLast4) || phoneHint || lastPhoneLast4 || '').replace(/\D/g, '').slice(-4);
-        var safeRowKey = String((result && result.rowKey) || selectedRowKey || lastSelectedRowKey || '').trim();
-        const response = await fetch(scriptUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            action: 'rollbookAttendSync',
-            phoneSuffix8: String(phoneSuffix8 || '').replace(/\D/g, '').slice(-8),
-            phone: '010' + String(phoneSuffix8 || '').replace(/\D/g, '').slice(-8),
-            phoneHint: safeHint,
-            memberName: String((result && result.memberName) || currentUserName || '').trim(),
-            selectedRowKey: safeRowKey,
-            confirmExtraPass: !!confirmExtraPass,
-          }),
-        });
-        const syncResult = await response.json();
-        finalizeAttendSuccess(result, syncResult);
-        handlePostAttendModals(result, { skipIfHandled: true });
-      } catch (e) {
-        finalizeAttendSuccess(result, { success: false, message: '네트워크 오류' });
-      } finally {
-        backgroundSyncInFlight = false;
-        isSubmitting = false;
-      }
+      backgroundSyncPromise = (async function () {
+        try {
+          var safeHint = String((result && result.phoneLast4) || phoneHint || lastPhoneLast4 || '')
+            .replace(/\D/g, '')
+            .slice(-4);
+          var safeRowKey = String((result && result.rowKey) || selectedRowKey || lastSelectedRowKey || '').trim();
+          const syncResult = await postRollbookAction_(
+            {
+              action: 'rollbookAttendSync',
+              phoneSuffix8: String(phoneSuffix8 || '').replace(/\D/g, '').slice(-8),
+              phone: '010' + String(phoneSuffix8 || '').replace(/\D/g, '').slice(-8),
+              phoneHint: safeHint,
+              memberName: String((result && result.memberName) || currentUserName || '').trim(),
+              selectedRowKey: safeRowKey,
+              confirmExtraPass: !!confirmExtraPass,
+            },
+            2
+          );
+          finalizeAttendSuccess(result, syncResult);
+          if (syncResult && syncResult.success) {
+            runBackgroundMemoSync(phoneSuffix8, result, selectedRowKey);
+          }
+          handlePostAttendModals(result);
+          return syncResult;
+        } catch (e) {
+          var errMsg = (e && e.message) ? e.message : '네트워크 오류';
+          finalizeAttendSuccess(result, { success: false, synced: false, message: errMsg });
+          return { success: false, synced: false, message: errMsg };
+        } finally {
+          backgroundSyncInFlight = false;
+          isSubmitting = false;
+        }
+      })();
+      return backgroundSyncPromise;
     }
 
     function handlePostAttendModals(result, options) {
       options = options || {};
-      if (options.skipIfHandled && window._postAttendHandled) return;
+      if (window._postAttendHandled) return;
 
       const rem = Number(result.remaining);
       if (result.showExtensionModal) {
@@ -1164,6 +1225,11 @@
 
     async function handleChoice(choice) {
       document.getElementById('infoModal').style.display = 'none';
+      if (backgroundSyncPromise) {
+        try {
+          await backgroundSyncPromise;
+        } catch (e) {}
+      }
       try {
         await fetch(scriptUrl, {
           method: 'POST',
@@ -1178,7 +1244,7 @@
         });
       } catch (e) {}
       alert('네, 좋은 하루 보내세요!');
-      location.reload();
+      resetPageForNextGuest();
     }
 
     renderDigits();
