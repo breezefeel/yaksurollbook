@@ -360,6 +360,17 @@
     .btn-yes { background: #3B82F6; color: white; }
     .btn-no { background: #F1F5F9; color: #64748b; }
     .btn-maybe { background: #F8FAFC; color: #94a3b8; font-size: 14px !important; }
+    .extension-modal-countdown {
+      margin: 14px 0 0;
+      font-size: 14px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+    .extension-modal-countdown .extension-count-sec {
+      font-weight: 800;
+      color: #3B82F6;
+      font-size: 18px;
+    }
 
     @media (max-width: 420px) {
       body { padding: 6px 8px; align-items: center; }
@@ -466,6 +477,7 @@
   <div id="infoModal" class="modal">
     <div class="modal-content">
       <p id="modalText"></p>
+      <p id="extensionModalCountdown" class="extension-modal-countdown" aria-live="polite"></p>
       <div class="modal-btns">
         <button class="btn-yes" onclick="handleChoice('yes')">네, 연장할게요! 😊</button>
         <button class="btn-no" onclick="handleChoice('maybe')">조금 더 고민할게요</button>
@@ -543,6 +555,8 @@
     let lastSelectedRowKey = '';
     let autoRefreshTimer = null;
     let autoCloseCountdownTimer = null;
+    let extensionModalCountdownTimer = null;
+    let extensionChoiceHandled = false;
     let isSubmitting = false;
     let recordingCountdownTimer = null;
     let backgroundSyncInFlight = false;
@@ -550,6 +564,7 @@
     let isPageResetting = false;
     const BACKGROUND_EST_SEC = 7;
     const AUTO_CLOSE_SEC = 30;
+    const EXTENSION_MODAL_SEC = 30;
     /** 서버 8시 캐시 — 당일 예약 회원 즉시 배너용 */
     let rollbookDayCache = { date: '', builtAt: '', bySuffix8: {} };
 
@@ -604,6 +619,7 @@
       if (isPageResetting) return;
       isPageResetting = true;
       stopAutoCloseCountdown();
+      stopExtensionModalCountdown();
       stopRecordingCountdown();
       hideStatus();
       hideMemberStats();
@@ -620,6 +636,7 @@
       lastSelectedRowKey = '';
       window._pendingExtraPass = null;
       window._postAttendHandled = false;
+      extensionChoiceHandled = false;
       scrollToPageTop();
       setTimeout(function () {
         isPageResetting = false;
@@ -855,7 +872,7 @@
           result.rollbookBanner =
             '지난번에는 연장 없이 이용을 마무리하시기로 하셨어요. 생각이 바뀌시거나 일정이 달라지시면 언제든 프런트에 편히 말씀 주세요. 오늘도 좋은 시간 되세요!';
         }
-      } else if (remain === 1 || remain === 2) {
+      } else if (remain === 1) {
         result.showExtensionModal = true;
       }
       return result;
@@ -1201,9 +1218,44 @@
       });
     });
 
+    function stopExtensionModalCountdown() {
+      if (extensionModalCountdownTimer) {
+        clearInterval(extensionModalCountdownTimer);
+        extensionModalCountdownTimer = null;
+      }
+      var countdownEl = document.getElementById('extensionModalCountdown');
+      if (countdownEl) countdownEl.innerHTML = '';
+    }
+
+    function paintExtensionModalCountdown(sec) {
+      var countdownEl = document.getElementById('extensionModalCountdown');
+      if (!countdownEl) return;
+      countdownEl.innerHTML =
+        '선택하지 않으면 <span class="extension-count-sec">' +
+        sec +
+        '</span>초 후 「조금 더 고민할게요」로 기록됩니다';
+    }
+
+    function startExtensionModalCountdown() {
+      stopExtensionModalCountdown();
+      extensionChoiceHandled = false;
+      var sec = EXTENSION_MODAL_SEC;
+      paintExtensionModalCountdown(sec);
+      extensionModalCountdownTimer = setInterval(function () {
+        sec -= 1;
+        if (sec <= 0) {
+          stopExtensionModalCountdown();
+          handleChoice('maybe', { autoTimeout: true });
+          return;
+        }
+        paintExtensionModalCountdown(sec);
+      }, 1000);
+    }
+
     function showModal(text) {
       document.getElementById('modalText').innerHTML = text;
       document.getElementById('infoModal').style.display = 'flex';
+      startExtensionModalCountdown();
     }
 
     async function confirmExtraPass(useExtra) {
@@ -1223,7 +1275,11 @@
       );
     }
 
-    async function handleChoice(choice) {
+    async function handleChoice(choice, options) {
+      options = options || {};
+      if (extensionChoiceHandled) return;
+      extensionChoiceHandled = true;
+      stopExtensionModalCountdown();
       document.getElementById('infoModal').style.display = 'none';
       if (backgroundSyncPromise) {
         try {
@@ -1243,7 +1299,9 @@
           }),
         });
       } catch (e) {}
-      alert('네, 좋은 하루 보내세요!');
+      if (!options.autoTimeout) {
+        alert('네, 좋은 하루 보내세요!');
+      }
       resetPageForNextGuest();
     }
 
